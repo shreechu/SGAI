@@ -59,6 +59,7 @@ resource "azurerm_cosmosdb_account" "cosmos" {
   geo_location {
      location          = azurerm_resource_group.rg.location
      failover_priority = 0
+     
   }
 }
 # Note: Azure OpenAI resource requires special access; create manually or with provider if allowed.
