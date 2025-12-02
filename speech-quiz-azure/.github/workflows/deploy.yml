@@ -1,0 +1,27 @@
+name: CI/CD - Build & (optional) Deploy
+
+on:
+  push:
+     branches:
+        - main
+
+jobs:
+  build:
+     runs-on: ubuntu-latest
+     steps:
+        - uses: actions/checkout@v4
+        - name: Setup Node
+          uses: actions/setup-node@v4
+          with:
+             node-version: 18
+        - name: Build backend
+          working-directory: backend
+          run: |
+             npm ci
+             npm run build
+        - name: Build frontend
+          working-directory: frontend
+          run: |
+             npm ci
+             npm run build
+  # Optional: add az login and terraform apply steps here for deployment to Azure
