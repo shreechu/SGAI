@@ -34,11 +34,42 @@ jobs:
             fi
             echo "waiting..."; sleep 1
           done
-      - name: Run healthcheck script
+      - name: Run backend healthcheck
         run: |
           chmod +x speech-quiz-azure/scripts/healthcheck.sh
           bash speech-quiz-azure/scripts/healthcheck.sh
+
+      - name: Build and serve frontend
+        working-directory: speech-quiz-azure/frontend
+        run: |
+          npm ci
+          npm run build
+          # serve the built frontend on port 5173 for smoke tests
+          npx serve -s dist -l 5173 &
+          echo $! > /tmp/frontend.pid
+
+      - name: Wait for frontend
+        run: |
+          for i in {1..20}; do
+            if curl -sS --fail http://localhost:5173/ >/dev/null 2>&1; then
+              echo "frontend ready"; break
+            fi
+            echo "waiting frontend..."; sleep 1
+          done
+
+      - name: Run frontend smoke test
+        run: |
+          chmod +x speech-quiz-azure/scripts/smoke_frontend.sh
+          bash speech-quiz-azure/scripts/smoke_frontend.sh
+
+      - name: Test evaluate endpoint (local scoring)
+        run: |
+          # Post a sample transcript to /api/evaluate and ensure a JSON with 'score' is returned
+          RESP=$(curl -sS -X POST http://localhost:7071/api/evaluate -H "Content-Type: application/json" -d '{"transcript":"pyramids hieroglyphics irrigation","question":{"id":"q1","question":"Describe three key achievements of the ancient Egyptians.","key_phrases":["pyramids","hieroglyphics","irrigation"]}}') || true
+          echo "Evaluate response: $RESP"
+          echo "$RESP" | jq '.score' || (echo "evaluate returned invalid JSON or missing score" && exit 2)
       - name: Stop backend
         if: always()
         run: |
           kill $(cat /tmp/backend.pid) || true
+          kill $(cat /tmp/frontend.pid) || true
