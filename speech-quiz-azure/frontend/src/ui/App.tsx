@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { BrowserRouter, useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
 import * as SpeechSDK from "microsoft-cognitiveservices-speech-sdk";
 
@@ -35,9 +36,42 @@ type SessionResult = {
 };
 
 export default function App() {
+  return (
+    <BrowserRouter>
+      <AppContent />
+    </BrowserRouter>
+  );
+}
+
+function AppContent() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  
+  // Determine current page from URL path
+  const getPageFromPath = (path: string): 'landing' | 'quiz' | 'admin' | 'adminLogin' => {
+    if (path === '/quiz') return 'quiz';
+    if (path === '/admin/login') return 'adminLogin';
+    if (path === '/admin') return 'admin';
+    return 'landing';
+  };
+
+  const currentPage = getPageFromPath(location.pathname);
+  
+  const navigateToPage = (page: 'landing' | 'quiz' | 'admin' | 'adminLogin') => {
+    const paths = {
+      'landing': '/',
+      'quiz': '/quiz',
+      'adminLogin': '/admin/login',
+      'admin': '/admin'
+    };
+    navigate(paths[page]);
+  };
+
   // Page state
-  const [currentPage, setCurrentPage] = useState<'landing' | 'quiz' | 'admin' | 'adminLogin'>('landing');
-  const [userProfile, setUserProfile] = useState<UserProfile>({ name: '', email: '', technicalConfidence: 5, consultativeConfidence: 5 });
+  const [userProfile, setUserProfile] = useState<UserProfile>(() => {
+    const saved = sessionStorage.getItem('userProfile');
+    return saved ? JSON.parse(saved) : { name: '', email: '', technicalConfidence: 5, consultativeConfidence: 5 };
+  });
   const [adminSessions, setAdminSessions] = useState<SessionResult[]>([]);
   
   const [question, setQuestion] = useState<Question | null>(null);
@@ -471,7 +505,7 @@ export default function App() {
 
   function handleAdminLogin(username: string, password: string) {
     if (username === 'sa' && password === 'test123') {
-      setCurrentPage('admin');
+      navigateToPage('admin');
       loadAdminSessions();
       return true;
     }
@@ -625,7 +659,10 @@ export default function App() {
             </div>
 
             <button
-              onClick={() => setCurrentPage('quiz')}
+              onClick={() => {
+                sessionStorage.setItem('userProfile', JSON.stringify(userProfile));
+                navigateToPage('quiz');
+              }}
               disabled={!isFormValid}
               style={{
                 width: "100%",
@@ -651,7 +688,7 @@ export default function App() {
             </button>
 
             <button
-              onClick={() => setCurrentPage('adminLogin')}
+              onClick={() => navigateToPage('adminLogin')}
               style={{
                 width: "100%",
                 marginTop: 16,
@@ -797,7 +834,7 @@ export default function App() {
             </button>
 
             <button
-              onClick={() => setCurrentPage('landing')}
+              onClick={() => navigateToPage('landing')}
               style={{
                 width: "100%",
                 padding: "12px",
@@ -841,7 +878,7 @@ export default function App() {
                 Admin Dashboard
               </h1>
               <button
-                onClick={() => setCurrentPage('landing')}
+                onClick={() => navigateToPage('landing')}
                 style={{
                   padding: "10px 20px",
                   backgroundColor: "#f44336",

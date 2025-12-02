@@ -1,42 +1,21 @@
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 import { useEffect, useRef, useState } from "react";
-import { BrowserRouter, useNavigate, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import axios from "axios";
 import * as SpeechSDK from "microsoft-cognitiveservices-speech-sdk";
 // Configure axios to use backend endpoint
 axios.defaults.baseURL = "http://localhost:7071";
 export default function App() {
-    return (_jsx(BrowserRouter, { children: _jsx(AppContent, {}) }));
+    return (_jsx(BrowserRouter, { children: _jsxs(Routes, { children: [_jsx(Route, { path: "/", element: _jsx(LandingPage, {}) }), _jsx(Route, { path: "/quiz", element: _jsx(QuizPage, {}) }), _jsx(Route, { path: "/admin/login", element: _jsx(AdminLoginPage, {}) }), _jsx(Route, { path: "/admin", element: _jsx(AdminDashboard, {}) }), _jsx(Route, { path: "*", element: _jsx(Navigate, { to: "/", replace: true }) })] }) }));
 }
-function AppContent() {
+function LandingPage() {
     const navigate = useNavigate();
-    const location = useLocation();
-    // Determine current page from URL path
-    const getPageFromPath = (path) => {
-        if (path === '/quiz')
-            return 'quiz';
-        if (path === '/admin/login')
-            return 'adminLogin';
-        if (path === '/admin')
-            return 'admin';
-        return 'landing';
+    const [userProfile, setUserProfile] = useState({ name: '', email: '', technicalConfidence: 5, consultativeConfidence: 5 });
+    const handleBeginAssessment = () => {
+        sessionStorage.setItem('userProfile', JSON.stringify(userProfile));
+        navigate('/quiz');
     };
-    const currentPage = getPageFromPath(location.pathname);
-    const navigateToPage = (page) => {
-        const paths = {
-            'landing': '/',
-            'quiz': '/quiz',
-            'adminLogin': '/admin/login',
-            'admin': '/admin'
-        };
-        navigate(paths[page]);
-    };
-    // Page state
-    const [userProfile, setUserProfile] = useState(() => {
-        const saved = sessionStorage.getItem('userProfile');
-        return saved ? JSON.parse(saved) : { name: '', email: '', technicalConfidence: 5, consultativeConfidence: 5 };
-    });
-    const [adminSessions, setAdminSessions] = useState([]);
+    const isFormValid = userProfile.name.trim() && userProfile.email.trim() && /\S+@\S+\.\S+/.test(userProfile.email);
     const [question, setQuestion] = useState(null);
     const [idx, setIdx] = useState(0);
     const [transcript, setTranscript] = useState("");
@@ -61,12 +40,8 @@ function AppContent() {
     const recognizerRef = useRef(null);
     const webVoiceRef = useRef(null);
     const tokenRef = useRef(null);
+    // Initialize browser speech API on mount
     useEffect(() => {
-        if (currentPage === 'quiz') {
-            fetchToken();
-            fetchQuestion(0);
-        }
-        // Detect browser Web Speech API availability as a fallback
         try {
             const w = window;
             if (w && (w.SpeechRecognition || w.webkitSpeechRecognition)) {
@@ -86,6 +61,13 @@ function AppContent() {
         }
         catch { }
     }, []);
+    // Load quiz when navigating to quiz page
+    useEffect(() => {
+        if (currentPage === 'quiz') {
+            fetchToken();
+            fetchQuestion(0);
+        }
+    }, [currentPage]);
     // Rebuild Azure synthesizer when voice or style changes
     useEffect(() => {
         if (!azureReady || !tokenRef.current)
@@ -235,11 +217,11 @@ function AppContent() {
             setLoading(false);
         }
     }
-    function onPlayQuestion() {
+    async function onPlayQuestion() {
         if (!question)
             return;
         try {
-            speakText(question.question);
+            await speakText(question.question);
         }
         catch (err) {
             setError(`Failed to play question: ${err.message}`);
@@ -464,7 +446,7 @@ function AppContent() {
     }
     function handleAdminLogin(username, password) {
         if (username === 'sa' && password === 'test123') {
-            navigateToPage('admin');
+            setCurrentPage('admin');
             loadAdminSessions();
             return true;
         }
@@ -528,10 +510,7 @@ function AppContent() {
                                             borderRadius: 20,
                                             fontSize: 18,
                                             fontWeight: 700
-                                        }, children: userProfile.consultativeConfidence }) })] }), _jsx("button", { onClick: () => {
-                                sessionStorage.setItem('userProfile', JSON.stringify(userProfile));
-                                navigateToPage('quiz');
-                            }, disabled: !isFormValid, style: {
+                                        }, children: userProfile.consultativeConfidence }) })] }), _jsx("button", { onClick: () => setCurrentPage('quiz'), disabled: !isFormValid, style: {
                                 width: "100%",
                                 padding: "16px",
                                 backgroundColor: isFormValid ? "#4CAF50" : "#ccc",
@@ -548,7 +527,7 @@ function AppContent() {
                                     e.currentTarget.style.transform = "translateY(-2px)";
                             }, onMouseLeave: e => {
                                 e.currentTarget.style.transform = "translateY(0)";
-                            }, children: "Begin Assessment \u2192" }), _jsx("button", { onClick: () => navigateToPage('adminLogin'), style: {
+                            }, children: "Begin Assessment \u2192" }), _jsx("button", { onClick: () => setCurrentPage('adminLogin'), style: {
                                 width: "100%",
                                 marginTop: 16,
                                 padding: "12px",
@@ -632,7 +611,7 @@ function AppContent() {
                                 fontWeight: 700,
                                 cursor: "pointer",
                                 marginBottom: 12
-                            }, children: "Login" }), _jsx("button", { onClick: () => navigateToPage('landing'), style: {
+                            }, children: "Login" }), _jsx("button", { onClick: () => setCurrentPage('landing'), style: {
                                 width: "100%",
                                 padding: "12px",
                                 backgroundColor: "transparent",
@@ -658,7 +637,7 @@ function AppContent() {
                                         fontWeight: 700,
                                         color: "#1a237e",
                                         margin: 0
-                                    }, children: "Admin Dashboard" }), _jsx("button", { onClick: () => navigateToPage('landing'), style: {
+                                    }, children: "Admin Dashboard" }), _jsx("button", { onClick: () => setCurrentPage('landing'), style: {
                                         padding: "10px 20px",
                                         backgroundColor: "#f44336",
                                         color: "white",
