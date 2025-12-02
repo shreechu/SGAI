@@ -17,7 +17,29 @@ type LearnLink = { title: string; url: string };
 type FinalItem = { questionId: string; heading?: string; topic?: string; evaluation: any; learnLinks: LearnLink[] };
 type FinalResults = { overallScore: number; results: FinalItem[] };
 
+type UserProfile = {
+  name: string;
+  email: string;
+  technicalConfidence: number;
+  consultativeConfidence: number;
+};
+
+type SessionResult = {
+  userName: string;
+  userEmail: string;
+  technicalConfidence: number;
+  consultativeConfidence: number;
+  overallScore: number;
+  timestamp: string;
+  results: FinalItem[];
+};
+
 export default function App() {
+  // Page state
+  const [currentPage, setCurrentPage] = useState<'landing' | 'quiz' | 'admin' | 'adminLogin'>('landing');
+  const [userProfile, setUserProfile] = useState<UserProfile>({ name: '', email: '', technicalConfidence: 5, consultativeConfidence: 5 });
+  const [adminSessions, setAdminSessions] = useState<SessionResult[]>([]);
+  
   const [question, setQuestion] = useState<Question | null>(null);
   const [idx, setIdx] = useState(0);
   const [transcript, setTranscript] = useState("");
@@ -46,8 +68,10 @@ export default function App() {
   const tokenRef = useRef<{ token: string; region: string } | null>(null);
 
   useEffect(() => {
-    fetchToken();
-    fetchQuestion(0);
+    if (currentPage === 'quiz') {
+      fetchToken();
+      fetchQuestion(0);
+    }
     // Detect browser Web Speech API availability as a fallback
     try {
       const w = window as any;
@@ -408,12 +432,524 @@ export default function App() {
       const answersArray = Object.entries(answers).map(([questionId, transcript]) => ({ questionId, transcript }));
       const resp = await axios.post("/api/evaluate-all", { sessionId: "local-session", answers: answersArray });
       setFinalResults(resp.data);
+      
+      // Save session result to backend
+      await saveSessionResult(resp.data);
     } catch (err: any) {
       setError(`Final evaluation failed: ${err.message}`);
       console.error(err);
     } finally {
       setLoading(false);
     }
+  }
+
+  async function saveSessionResult(results: FinalResults) {
+    try {
+      const sessionData: SessionResult = {
+        userName: userProfile.name,
+        userEmail: userProfile.email,
+        technicalConfidence: userProfile.technicalConfidence,
+        consultativeConfidence: userProfile.consultativeConfidence,
+        overallScore: results.overallScore,
+        timestamp: new Date().toISOString(),
+        results: results.results
+      };
+      await axios.post("/api/sessions", sessionData);
+    } catch (err) {
+      console.error("Failed to save session:", err);
+    }
+  }
+
+  async function loadAdminSessions() {
+    try {
+      const resp = await axios.get("/api/sessions");
+      setAdminSessions(resp.data);
+    } catch (err) {
+      console.error("Failed to load sessions:", err);
+    }
+  }
+
+  function handleAdminLogin(username: string, password: string) {
+    if (username === 'sa' && password === 'test123') {
+      setCurrentPage('admin');
+      loadAdminSessions();
+      return true;
+    }
+    return false;
+  }
+
+  function renderLandingPage() {
+    const isFormValid = userProfile.name.trim() && userProfile.email.trim() && userProfile.email.includes('@');
+    
+    return (
+      <div style={{ 
+        minHeight: "100vh", 
+        background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+        fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+        padding: "40px 20px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center"
+      }}>
+        <div style={{ maxWidth: 600, width: "100%" }}>
+          <div style={{
+            background: "white",
+            borderRadius: 20,
+            boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+            padding: 40
+          }}>
+            <h1 style={{ 
+              fontSize: 32, 
+              fontWeight: 700, 
+              marginBottom: 8,
+              color: "#1a237e",
+              textAlign: "center"
+            }}>
+              Mission Critical Architect Assessment
+            </h1>
+            <p style={{ 
+              fontSize: 16, 
+              color: "#666",
+              textAlign: "center",
+              marginBottom: 32
+            }}>
+              Azure Reliability & Performance Readiness
+            </p>
+
+            <div style={{ marginBottom: 24 }}>
+              <label style={{ display: "block", marginBottom: 8, fontWeight: 600, color: "#37474f" }}>
+                Full Name *
+              </label>
+              <input
+                type="text"
+                value={userProfile.name}
+                onChange={e => setUserProfile(prev => ({ ...prev, name: e.target.value }))}
+                placeholder="Enter your full name"
+                style={{
+                  width: "100%",
+                  padding: "12px 16px",
+                  fontSize: 16,
+                  border: "2px solid #e0e0e0",
+                  borderRadius: 8,
+                  outline: "none",
+                  transition: "border-color 0.2s"
+                }}
+                onFocus={e => e.currentTarget.style.borderColor = "#667eea"}
+                onBlur={e => e.currentTarget.style.borderColor = "#e0e0e0"}
+              />
+            </div>
+
+            <div style={{ marginBottom: 32 }}>
+              <label style={{ display: "block", marginBottom: 8, fontWeight: 600, color: "#37474f" }}>
+                Email Address *
+              </label>
+              <input
+                type="email"
+                value={userProfile.email}
+                onChange={e => setUserProfile(prev => ({ ...prev, email: e.target.value }))}
+                placeholder="your.email@company.com"
+                style={{
+                  width: "100%",
+                  padding: "12px 16px",
+                  fontSize: 16,
+                  border: "2px solid #e0e0e0",
+                  borderRadius: 8,
+                  outline: "none",
+                  transition: "border-color 0.2s"
+                }}
+                onFocus={e => e.currentTarget.style.borderColor = "#667eea"}
+                onBlur={e => e.currentTarget.style.borderColor = "#e0e0e0"}
+              />
+            </div>
+
+            <div style={{ marginBottom: 24 }}>
+              <label style={{ display: "block", marginBottom: 12, fontWeight: 600, color: "#37474f" }}>
+                How confident are you to have technical conversations with customer executives?
+              </label>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <span style={{ fontSize: 14, color: "#999", minWidth: 30 }}>Low</span>
+                <input
+                  type="range"
+                  min="1"
+                  max="10"
+                  value={userProfile.technicalConfidence}
+                  onChange={e => setUserProfile(prev => ({ ...prev, technicalConfidence: parseInt(e.target.value) }))}
+                  style={{ flex: 1 }}
+                />
+                <span style={{ fontSize: 14, color: "#999", minWidth: 30 }}>High</span>
+              </div>
+              <div style={{ textAlign: "center", marginTop: 8 }}>
+                <span style={{ 
+                  display: "inline-block",
+                  backgroundColor: "#667eea",
+                  color: "white",
+                  padding: "6px 16px",
+                  borderRadius: 20,
+                  fontSize: 18,
+                  fontWeight: 700
+                }}>
+                  {userProfile.technicalConfidence}
+                </span>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 32 }}>
+              <label style={{ display: "block", marginBottom: 12, fontWeight: 600, color: "#37474f" }}>
+                How confident are you with consultative skills?
+              </label>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <span style={{ fontSize: 14, color: "#999", minWidth: 30 }}>Low</span>
+                <input
+                  type="range"
+                  min="1"
+                  max="10"
+                  value={userProfile.consultativeConfidence}
+                  onChange={e => setUserProfile(prev => ({ ...prev, consultativeConfidence: parseInt(e.target.value) }))}
+                  style={{ flex: 1 }}
+                />
+                <span style={{ fontSize: 14, color: "#999", minWidth: 30 }}>High</span>
+              </div>
+              <div style={{ textAlign: "center", marginTop: 8 }}>
+                <span style={{ 
+                  display: "inline-block",
+                  backgroundColor: "#764ba2",
+                  color: "white",
+                  padding: "6px 16px",
+                  borderRadius: 20,
+                  fontSize: 18,
+                  fontWeight: 700
+                }}>
+                  {userProfile.consultativeConfidence}
+                </span>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setCurrentPage('quiz')}
+              disabled={!isFormValid}
+              style={{
+                width: "100%",
+                padding: "16px",
+                backgroundColor: isFormValid ? "#4CAF50" : "#ccc",
+                color: "white",
+                border: "none",
+                borderRadius: 12,
+                fontSize: 18,
+                fontWeight: 700,
+                cursor: isFormValid ? "pointer" : "not-allowed",
+                transition: "all 0.3s",
+                boxShadow: isFormValid ? "0 4px 12px rgba(76, 175, 80, 0.4)" : "none"
+              }}
+              onMouseEnter={e => {
+                if (isFormValid) e.currentTarget.style.transform = "translateY(-2px)";
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.transform = "translateY(0)";
+              }}
+            >
+              Begin Assessment →
+            </button>
+
+            <button
+              onClick={() => setCurrentPage('adminLogin')}
+              style={{
+                width: "100%",
+                marginTop: 16,
+                padding: "12px",
+                backgroundColor: "transparent",
+                color: "#667eea",
+                border: "2px solid #667eea",
+                borderRadius: 12,
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: "pointer",
+                transition: "all 0.3s"
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.backgroundColor = "#667eea";
+                e.currentTarget.style.color = "white";
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.backgroundColor = "transparent";
+                e.currentTarget.style.color = "#667eea";
+              }}
+            >
+              🔐 Admin Login
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  function renderAdminLogin() {
+    const [username, setUsername] = useState('');
+    const [password, setPassword] = useState('');
+    const [loginError, setLoginError] = useState('');
+
+    const handleLogin = () => {
+      if (handleAdminLogin(username, password)) {
+        setLoginError('');
+      } else {
+        setLoginError('Invalid credentials');
+      }
+    };
+
+    return (
+      <div style={{ 
+        minHeight: "100vh", 
+        background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+        fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+        padding: "40px 20px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center"
+      }}>
+        <div style={{ maxWidth: 400, width: "100%" }}>
+          <div style={{
+            background: "white",
+            borderRadius: 20,
+            boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+            padding: 40
+          }}>
+            <h2 style={{ 
+              fontSize: 28, 
+              fontWeight: 700, 
+              marginBottom: 24,
+              color: "#1a237e",
+              textAlign: "center"
+            }}>
+              Admin Login
+            </h2>
+
+            {loginError && (
+              <div style={{
+                padding: 12,
+                backgroundColor: "#ffebee",
+                border: "1px solid #f44336",
+                borderRadius: 8,
+                marginBottom: 20,
+                color: "#c62828",
+                textAlign: "center"
+              }}>
+                {loginError}
+              </div>
+            )}
+
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ display: "block", marginBottom: 8, fontWeight: 600, color: "#37474f" }}>
+                Username
+              </label>
+              <input
+                type="text"
+                value={username}
+                onChange={e => setUsername(e.target.value)}
+                placeholder="Enter username"
+                style={{
+                  width: "100%",
+                  padding: "12px 16px",
+                  fontSize: 16,
+                  border: "2px solid #e0e0e0",
+                  borderRadius: 8,
+                  outline: "none"
+                }}
+                onKeyPress={e => e.key === 'Enter' && handleLogin()}
+              />
+            </div>
+
+            <div style={{ marginBottom: 24 }}>
+              <label style={{ display: "block", marginBottom: 8, fontWeight: 600, color: "#37474f" }}>
+                Password
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="Enter password"
+                style={{
+                  width: "100%",
+                  padding: "12px 16px",
+                  fontSize: 16,
+                  border: "2px solid #e0e0e0",
+                  borderRadius: 8,
+                  outline: "none"
+                }}
+                onKeyPress={e => e.key === 'Enter' && handleLogin()}
+              />
+            </div>
+
+            <button
+              onClick={handleLogin}
+              style={{
+                width: "100%",
+                padding: "14px",
+                backgroundColor: "#667eea",
+                color: "white",
+                border: "none",
+                borderRadius: 12,
+                fontSize: 16,
+                fontWeight: 700,
+                cursor: "pointer",
+                marginBottom: 12
+              }}
+            >
+              Login
+            </button>
+
+            <button
+              onClick={() => setCurrentPage('landing')}
+              style={{
+                width: "100%",
+                padding: "12px",
+                backgroundColor: "transparent",
+                color: "#666",
+                border: "none",
+                fontSize: 14,
+                cursor: "pointer"
+              }}
+            >
+              ← Back to Home
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  function renderAdminDashboard() {
+    return (
+      <div style={{ 
+        minHeight: "100vh", 
+        background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+        fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+        padding: "20px"
+      }}>
+        <div style={{ maxWidth: 1400, margin: "0 auto" }}>
+          <div style={{
+            background: "white",
+            borderRadius: 20,
+            boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+            padding: 32
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+              <h1 style={{ 
+                fontSize: 32, 
+                fontWeight: 700,
+                color: "#1a237e",
+                margin: 0
+              }}>
+                Admin Dashboard
+              </h1>
+              <button
+                onClick={() => setCurrentPage('landing')}
+                style={{
+                  padding: "10px 20px",
+                  backgroundColor: "#f44336",
+                  color: "white",
+                  border: "none",
+                  borderRadius: 8,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  cursor: "pointer"
+                }}
+              >
+                Logout
+              </button>
+            </div>
+
+            <p style={{ color: "#666", marginBottom: 24 }}>
+              Total Sessions: <strong>{adminSessions.length}</strong>
+            </p>
+
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ 
+                width: "100%", 
+                borderCollapse: "collapse",
+                fontSize: 14
+              }}>
+                <thead>
+                  <tr style={{ backgroundColor: "#f5f5f5" }}>
+                    <th style={{ padding: 12, textAlign: "left", borderBottom: "2px solid #ddd" }}>Date</th>
+                    <th style={{ padding: 12, textAlign: "left", borderBottom: "2px solid #ddd" }}>Name</th>
+                    <th style={{ padding: 12, textAlign: "left", borderBottom: "2px solid #ddd" }}>Email</th>
+                    <th style={{ padding: 12, textAlign: "center", borderBottom: "2px solid #ddd" }}>Technical Conf.</th>
+                    <th style={{ padding: 12, textAlign: "center", borderBottom: "2px solid #ddd" }}>Consultative Conf.</th>
+                    <th style={{ padding: 12, textAlign: "center", borderBottom: "2px solid #ddd" }}>Overall Score</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {adminSessions.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} style={{ padding: 24, textAlign: "center", color: "#999" }}>
+                        No sessions recorded yet
+                      </td>
+                    </tr>
+                  ) : (
+                    adminSessions.map((session, idx) => (
+                      <tr key={idx} style={{ borderBottom: "1px solid #eee" }}>
+                        <td style={{ padding: 12 }}>
+                          {new Date(session.timestamp).toLocaleDateString()} {new Date(session.timestamp).toLocaleTimeString()}
+                        </td>
+                        <td style={{ padding: 12, fontWeight: 600 }}>{session.userName}</td>
+                        <td style={{ padding: 12 }}>{session.userEmail}</td>
+                        <td style={{ padding: 12, textAlign: "center" }}>
+                          <span style={{
+                            backgroundColor: session.technicalConfidence >= 7 ? "#4CAF50" : session.technicalConfidence >= 4 ? "#FF9800" : "#f44336",
+                            color: "white",
+                            padding: "4px 12px",
+                            borderRadius: 12,
+                            fontSize: 13,
+                            fontWeight: 600
+                          }}>
+                            {session.technicalConfidence}/10
+                          </span>
+                        </td>
+                        <td style={{ padding: 12, textAlign: "center" }}>
+                          <span style={{
+                            backgroundColor: session.consultativeConfidence >= 7 ? "#4CAF50" : session.consultativeConfidence >= 4 ? "#FF9800" : "#f44336",
+                            color: "white",
+                            padding: "4px 12px",
+                            borderRadius: 12,
+                            fontSize: 13,
+                            fontWeight: 600
+                          }}>
+                            {session.consultativeConfidence}/10
+                          </span>
+                        </td>
+                        <td style={{ padding: 12, textAlign: "center" }}>
+                          <span style={{
+                            backgroundColor: session.overallScore >= 70 ? "#4CAF50" : session.overallScore >= 40 ? "#FF9800" : "#f44336",
+                            color: "white",
+                            padding: "4px 16px",
+                            borderRadius: 12,
+                            fontSize: 14,
+                            fontWeight: 700
+                          }}>
+                            {session.overallScore}%
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (currentPage === 'landing') {
+    return renderLandingPage();
+  }
+
+  if (currentPage === 'adminLogin') {
+    return renderAdminLogin();
+  }
+
+  if (currentPage === 'admin') {
+    return renderAdminDashboard();
   }
 
   return (
@@ -457,13 +993,13 @@ export default function App() {
             marginBottom: 16
           }}>
             <p style={{ marginBottom: 12, fontSize: 16, fontWeight: 600 }}>
-              <strong>CTO of Zava speaks:</strong>
+              <strong>CTO of Zava speaks{userProfile.name ? ` to ${userProfile.name}` : ''}:</strong>
             </p>
             <p style={{ fontSize: 15, lineHeight: 1.6, opacity: 0.95 }}>
               Our mission-critical app has had too many outages, and our support experience hasn't met expectations. I need a practical plan that improves reliability quickly, shortens detection and recovery times, and brings spend under control without adding risk.
             </p>
             <p style={{ fontSize: 15, lineHeight: 1.6, opacity: 0.95, marginTop: 8 }}>
-              Speak to me directly. Be clear, pragmatic, and back your recommendations with Azure best practices.
+              Speak to me directly{userProfile.name ? `, ${userProfile.name.split(' ')[0]}` : ''}. Be clear, pragmatic, and back your recommendations with Azure best practices.
             </p>
           </div>
 

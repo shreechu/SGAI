@@ -5,6 +5,10 @@ import * as SpeechSDK from "microsoft-cognitiveservices-speech-sdk";
 // Configure axios to use backend endpoint
 axios.defaults.baseURL = "http://localhost:7071";
 export default function App() {
+    // Page state
+    const [currentPage, setCurrentPage] = useState('landing');
+    const [userProfile, setUserProfile] = useState({ name: '', email: '', technicalConfidence: 5, consultativeConfidence: 5 });
+    const [adminSessions, setAdminSessions] = useState([]);
     const [question, setQuestion] = useState(null);
     const [idx, setIdx] = useState(0);
     const [transcript, setTranscript] = useState("");
@@ -30,8 +34,10 @@ export default function App() {
     const webVoiceRef = useRef(null);
     const tokenRef = useRef(null);
     useEffect(() => {
-        fetchToken();
-        fetchQuestion(0);
+        if (currentPage === 'quiz') {
+            fetchToken();
+            fetchQuestion(0);
+        }
         // Detect browser Web Speech API availability as a fallback
         try {
             const w = window;
@@ -391,6 +397,8 @@ export default function App() {
             const answersArray = Object.entries(answers).map(([questionId, transcript]) => ({ questionId, transcript }));
             const resp = await axios.post("/api/evaluate-all", { sessionId: "local-session", answers: answersArray });
             setFinalResults(resp.data);
+            // Save session result to backend
+            await saveSessionResult(resp.data);
         }
         catch (err) {
             setError(`Final evaluation failed: ${err.message}`);
@@ -399,6 +407,270 @@ export default function App() {
         finally {
             setLoading(false);
         }
+    }
+    async function saveSessionResult(results) {
+        try {
+            const sessionData = {
+                userName: userProfile.name,
+                userEmail: userProfile.email,
+                technicalConfidence: userProfile.technicalConfidence,
+                consultativeConfidence: userProfile.consultativeConfidence,
+                overallScore: results.overallScore,
+                timestamp: new Date().toISOString(),
+                results: results.results
+            };
+            await axios.post("/api/sessions", sessionData);
+        }
+        catch (err) {
+            console.error("Failed to save session:", err);
+        }
+    }
+    async function loadAdminSessions() {
+        try {
+            const resp = await axios.get("/api/sessions");
+            setAdminSessions(resp.data);
+        }
+        catch (err) {
+            console.error("Failed to load sessions:", err);
+        }
+    }
+    function handleAdminLogin(username, password) {
+        if (username === 'sa' && password === 'test123') {
+            setCurrentPage('admin');
+            loadAdminSessions();
+            return true;
+        }
+        return false;
+    }
+    function renderLandingPage() {
+        const isFormValid = userProfile.name.trim() && userProfile.email.trim() && userProfile.email.includes('@');
+        return (_jsx("div", { style: {
+                minHeight: "100vh",
+                background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+                padding: "40px 20px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center"
+            }, children: _jsx("div", { style: { maxWidth: 600, width: "100%" }, children: _jsxs("div", { style: {
+                        background: "white",
+                        borderRadius: 20,
+                        boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+                        padding: 40
+                    }, children: [_jsx("h1", { style: {
+                                fontSize: 32,
+                                fontWeight: 700,
+                                marginBottom: 8,
+                                color: "#1a237e",
+                                textAlign: "center"
+                            }, children: "Mission Critical Architect Assessment" }), _jsx("p", { style: {
+                                fontSize: 16,
+                                color: "#666",
+                                textAlign: "center",
+                                marginBottom: 32
+                            }, children: "Azure Reliability & Performance Readiness" }), _jsxs("div", { style: { marginBottom: 24 }, children: [_jsx("label", { style: { display: "block", marginBottom: 8, fontWeight: 600, color: "#37474f" }, children: "Full Name *" }), _jsx("input", { type: "text", value: userProfile.name, onChange: e => setUserProfile(prev => ({ ...prev, name: e.target.value })), placeholder: "Enter your full name", style: {
+                                        width: "100%",
+                                        padding: "12px 16px",
+                                        fontSize: 16,
+                                        border: "2px solid #e0e0e0",
+                                        borderRadius: 8,
+                                        outline: "none",
+                                        transition: "border-color 0.2s"
+                                    }, onFocus: e => e.currentTarget.style.borderColor = "#667eea", onBlur: e => e.currentTarget.style.borderColor = "#e0e0e0" })] }), _jsxs("div", { style: { marginBottom: 32 }, children: [_jsx("label", { style: { display: "block", marginBottom: 8, fontWeight: 600, color: "#37474f" }, children: "Email Address *" }), _jsx("input", { type: "email", value: userProfile.email, onChange: e => setUserProfile(prev => ({ ...prev, email: e.target.value })), placeholder: "your.email@company.com", style: {
+                                        width: "100%",
+                                        padding: "12px 16px",
+                                        fontSize: 16,
+                                        border: "2px solid #e0e0e0",
+                                        borderRadius: 8,
+                                        outline: "none",
+                                        transition: "border-color 0.2s"
+                                    }, onFocus: e => e.currentTarget.style.borderColor = "#667eea", onBlur: e => e.currentTarget.style.borderColor = "#e0e0e0" })] }), _jsxs("div", { style: { marginBottom: 24 }, children: [_jsx("label", { style: { display: "block", marginBottom: 12, fontWeight: 600, color: "#37474f" }, children: "How confident are you to have technical conversations with customer executives?" }), _jsxs("div", { style: { display: "flex", alignItems: "center", gap: 12 }, children: [_jsx("span", { style: { fontSize: 14, color: "#999", minWidth: 30 }, children: "Low" }), _jsx("input", { type: "range", min: "1", max: "10", value: userProfile.technicalConfidence, onChange: e => setUserProfile(prev => ({ ...prev, technicalConfidence: parseInt(e.target.value) })), style: { flex: 1 } }), _jsx("span", { style: { fontSize: 14, color: "#999", minWidth: 30 }, children: "High" })] }), _jsx("div", { style: { textAlign: "center", marginTop: 8 }, children: _jsx("span", { style: {
+                                            display: "inline-block",
+                                            backgroundColor: "#667eea",
+                                            color: "white",
+                                            padding: "6px 16px",
+                                            borderRadius: 20,
+                                            fontSize: 18,
+                                            fontWeight: 700
+                                        }, children: userProfile.technicalConfidence }) })] }), _jsxs("div", { style: { marginBottom: 32 }, children: [_jsx("label", { style: { display: "block", marginBottom: 12, fontWeight: 600, color: "#37474f" }, children: "How confident are you with consultative skills?" }), _jsxs("div", { style: { display: "flex", alignItems: "center", gap: 12 }, children: [_jsx("span", { style: { fontSize: 14, color: "#999", minWidth: 30 }, children: "Low" }), _jsx("input", { type: "range", min: "1", max: "10", value: userProfile.consultativeConfidence, onChange: e => setUserProfile(prev => ({ ...prev, consultativeConfidence: parseInt(e.target.value) })), style: { flex: 1 } }), _jsx("span", { style: { fontSize: 14, color: "#999", minWidth: 30 }, children: "High" })] }), _jsx("div", { style: { textAlign: "center", marginTop: 8 }, children: _jsx("span", { style: {
+                                            display: "inline-block",
+                                            backgroundColor: "#764ba2",
+                                            color: "white",
+                                            padding: "6px 16px",
+                                            borderRadius: 20,
+                                            fontSize: 18,
+                                            fontWeight: 700
+                                        }, children: userProfile.consultativeConfidence }) })] }), _jsx("button", { onClick: () => setCurrentPage('quiz'), disabled: !isFormValid, style: {
+                                width: "100%",
+                                padding: "16px",
+                                backgroundColor: isFormValid ? "#4CAF50" : "#ccc",
+                                color: "white",
+                                border: "none",
+                                borderRadius: 12,
+                                fontSize: 18,
+                                fontWeight: 700,
+                                cursor: isFormValid ? "pointer" : "not-allowed",
+                                transition: "all 0.3s",
+                                boxShadow: isFormValid ? "0 4px 12px rgba(76, 175, 80, 0.4)" : "none"
+                            }, onMouseEnter: e => {
+                                if (isFormValid)
+                                    e.currentTarget.style.transform = "translateY(-2px)";
+                            }, onMouseLeave: e => {
+                                e.currentTarget.style.transform = "translateY(0)";
+                            }, children: "Begin Assessment \u2192" }), _jsx("button", { onClick: () => setCurrentPage('adminLogin'), style: {
+                                width: "100%",
+                                marginTop: 16,
+                                padding: "12px",
+                                backgroundColor: "transparent",
+                                color: "#667eea",
+                                border: "2px solid #667eea",
+                                borderRadius: 12,
+                                fontSize: 14,
+                                fontWeight: 600,
+                                cursor: "pointer",
+                                transition: "all 0.3s"
+                            }, onMouseEnter: e => {
+                                e.currentTarget.style.backgroundColor = "#667eea";
+                                e.currentTarget.style.color = "white";
+                            }, onMouseLeave: e => {
+                                e.currentTarget.style.backgroundColor = "transparent";
+                                e.currentTarget.style.color = "#667eea";
+                            }, children: "\uD83D\uDD10 Admin Login" })] }) }) }));
+    }
+    function renderAdminLogin() {
+        const [username, setUsername] = useState('');
+        const [password, setPassword] = useState('');
+        const [loginError, setLoginError] = useState('');
+        const handleLogin = () => {
+            if (handleAdminLogin(username, password)) {
+                setLoginError('');
+            }
+            else {
+                setLoginError('Invalid credentials');
+            }
+        };
+        return (_jsx("div", { style: {
+                minHeight: "100vh",
+                background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+                padding: "40px 20px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center"
+            }, children: _jsx("div", { style: { maxWidth: 400, width: "100%" }, children: _jsxs("div", { style: {
+                        background: "white",
+                        borderRadius: 20,
+                        boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+                        padding: 40
+                    }, children: [_jsx("h2", { style: {
+                                fontSize: 28,
+                                fontWeight: 700,
+                                marginBottom: 24,
+                                color: "#1a237e",
+                                textAlign: "center"
+                            }, children: "Admin Login" }), loginError && (_jsx("div", { style: {
+                                padding: 12,
+                                backgroundColor: "#ffebee",
+                                border: "1px solid #f44336",
+                                borderRadius: 8,
+                                marginBottom: 20,
+                                color: "#c62828",
+                                textAlign: "center"
+                            }, children: loginError })), _jsxs("div", { style: { marginBottom: 20 }, children: [_jsx("label", { style: { display: "block", marginBottom: 8, fontWeight: 600, color: "#37474f" }, children: "Username" }), _jsx("input", { type: "text", value: username, onChange: e => setUsername(e.target.value), placeholder: "Enter username", style: {
+                                        width: "100%",
+                                        padding: "12px 16px",
+                                        fontSize: 16,
+                                        border: "2px solid #e0e0e0",
+                                        borderRadius: 8,
+                                        outline: "none"
+                                    }, onKeyPress: e => e.key === 'Enter' && handleLogin() })] }), _jsxs("div", { style: { marginBottom: 24 }, children: [_jsx("label", { style: { display: "block", marginBottom: 8, fontWeight: 600, color: "#37474f" }, children: "Password" }), _jsx("input", { type: "password", value: password, onChange: e => setPassword(e.target.value), placeholder: "Enter password", style: {
+                                        width: "100%",
+                                        padding: "12px 16px",
+                                        fontSize: 16,
+                                        border: "2px solid #e0e0e0",
+                                        borderRadius: 8,
+                                        outline: "none"
+                                    }, onKeyPress: e => e.key === 'Enter' && handleLogin() })] }), _jsx("button", { onClick: handleLogin, style: {
+                                width: "100%",
+                                padding: "14px",
+                                backgroundColor: "#667eea",
+                                color: "white",
+                                border: "none",
+                                borderRadius: 12,
+                                fontSize: 16,
+                                fontWeight: 700,
+                                cursor: "pointer",
+                                marginBottom: 12
+                            }, children: "Login" }), _jsx("button", { onClick: () => setCurrentPage('landing'), style: {
+                                width: "100%",
+                                padding: "12px",
+                                backgroundColor: "transparent",
+                                color: "#666",
+                                border: "none",
+                                fontSize: 14,
+                                cursor: "pointer"
+                            }, children: "\u2190 Back to Home" })] }) }) }));
+    }
+    function renderAdminDashboard() {
+        return (_jsx("div", { style: {
+                minHeight: "100vh",
+                background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+                padding: "20px"
+            }, children: _jsx("div", { style: { maxWidth: 1400, margin: "0 auto" }, children: _jsxs("div", { style: {
+                        background: "white",
+                        borderRadius: 20,
+                        boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+                        padding: 32
+                    }, children: [_jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }, children: [_jsx("h1", { style: {
+                                        fontSize: 32,
+                                        fontWeight: 700,
+                                        color: "#1a237e",
+                                        margin: 0
+                                    }, children: "Admin Dashboard" }), _jsx("button", { onClick: () => setCurrentPage('landing'), style: {
+                                        padding: "10px 20px",
+                                        backgroundColor: "#f44336",
+                                        color: "white",
+                                        border: "none",
+                                        borderRadius: 8,
+                                        fontSize: 14,
+                                        fontWeight: 600,
+                                        cursor: "pointer"
+                                    }, children: "Logout" })] }), _jsxs("p", { style: { color: "#666", marginBottom: 24 }, children: ["Total Sessions: ", _jsx("strong", { children: adminSessions.length })] }), _jsx("div", { style: { overflowX: "auto" }, children: _jsxs("table", { style: {
+                                    width: "100%",
+                                    borderCollapse: "collapse",
+                                    fontSize: 14
+                                }, children: [_jsx("thead", { children: _jsxs("tr", { style: { backgroundColor: "#f5f5f5" }, children: [_jsx("th", { style: { padding: 12, textAlign: "left", borderBottom: "2px solid #ddd" }, children: "Date" }), _jsx("th", { style: { padding: 12, textAlign: "left", borderBottom: "2px solid #ddd" }, children: "Name" }), _jsx("th", { style: { padding: 12, textAlign: "left", borderBottom: "2px solid #ddd" }, children: "Email" }), _jsx("th", { style: { padding: 12, textAlign: "center", borderBottom: "2px solid #ddd" }, children: "Technical Conf." }), _jsx("th", { style: { padding: 12, textAlign: "center", borderBottom: "2px solid #ddd" }, children: "Consultative Conf." }), _jsx("th", { style: { padding: 12, textAlign: "center", borderBottom: "2px solid #ddd" }, children: "Overall Score" })] }) }), _jsx("tbody", { children: adminSessions.length === 0 ? (_jsx("tr", { children: _jsx("td", { colSpan: 6, style: { padding: 24, textAlign: "center", color: "#999" }, children: "No sessions recorded yet" }) })) : (adminSessions.map((session, idx) => (_jsxs("tr", { style: { borderBottom: "1px solid #eee" }, children: [_jsxs("td", { style: { padding: 12 }, children: [new Date(session.timestamp).toLocaleDateString(), " ", new Date(session.timestamp).toLocaleTimeString()] }), _jsx("td", { style: { padding: 12, fontWeight: 600 }, children: session.userName }), _jsx("td", { style: { padding: 12 }, children: session.userEmail }), _jsx("td", { style: { padding: 12, textAlign: "center" }, children: _jsxs("span", { style: {
+                                                            backgroundColor: session.technicalConfidence >= 7 ? "#4CAF50" : session.technicalConfidence >= 4 ? "#FF9800" : "#f44336",
+                                                            color: "white",
+                                                            padding: "4px 12px",
+                                                            borderRadius: 12,
+                                                            fontSize: 13,
+                                                            fontWeight: 600
+                                                        }, children: [session.technicalConfidence, "/10"] }) }), _jsx("td", { style: { padding: 12, textAlign: "center" }, children: _jsxs("span", { style: {
+                                                            backgroundColor: session.consultativeConfidence >= 7 ? "#4CAF50" : session.consultativeConfidence >= 4 ? "#FF9800" : "#f44336",
+                                                            color: "white",
+                                                            padding: "4px 12px",
+                                                            borderRadius: 12,
+                                                            fontSize: 13,
+                                                            fontWeight: 600
+                                                        }, children: [session.consultativeConfidence, "/10"] }) }), _jsx("td", { style: { padding: 12, textAlign: "center" }, children: _jsxs("span", { style: {
+                                                            backgroundColor: session.overallScore >= 70 ? "#4CAF50" : session.overallScore >= 40 ? "#FF9800" : "#f44336",
+                                                            color: "white",
+                                                            padding: "4px 16px",
+                                                            borderRadius: 12,
+                                                            fontSize: 14,
+                                                            fontWeight: 700
+                                                        }, children: [session.overallScore, "%"] }) })] }, idx)))) })] }) })] }) }) }));
+    }
+    if (currentPage === 'landing') {
+        return renderLandingPage();
+    }
+    if (currentPage === 'adminLogin') {
+        return renderAdminLogin();
+    }
+    if (currentPage === 'admin') {
+        return renderAdminDashboard();
     }
     return (_jsxs("div", { style: {
             minHeight: "100vh",
@@ -426,7 +698,7 @@ export default function App() {
                                     borderRadius: 12,
                                     color: "white",
                                     marginBottom: 16
-                                }, children: [_jsx("p", { style: { marginBottom: 12, fontSize: 16, fontWeight: 600 }, children: _jsx("strong", { children: "CTO of Zava speaks:" }) }), _jsx("p", { style: { fontSize: 15, lineHeight: 1.6, opacity: 0.95 }, children: "Our mission-critical app has had too many outages, and our support experience hasn't met expectations. I need a practical plan that improves reliability quickly, shortens detection and recovery times, and brings spend under control without adding risk." }), _jsx("p", { style: { fontSize: 15, lineHeight: 1.6, opacity: 0.95, marginTop: 8 }, children: "Speak to me directly. Be clear, pragmatic, and back your recommendations with Azure best practices." })] }), _jsxs("div", { style: {
+                                }, children: [_jsx("p", { style: { marginBottom: 12, fontSize: 16, fontWeight: 600 }, children: _jsxs("strong", { children: ["CTO of Zava speaks", userProfile.name ? ` to ${userProfile.name}` : '', ":"] }) }), _jsx("p", { style: { fontSize: 15, lineHeight: 1.6, opacity: 0.95 }, children: "Our mission-critical app has had too many outages, and our support experience hasn't met expectations. I need a practical plan that improves reliability quickly, shortens detection and recovery times, and brings spend under control without adding risk." }), _jsxs("p", { style: { fontSize: 15, lineHeight: 1.6, opacity: 0.95, marginTop: 8 }, children: ["Speak to me directly", userProfile.name ? `, ${userProfile.name.split(' ')[0]}` : '', ". Be clear, pragmatic, and back your recommendations with Azure best practices."] })] }), _jsxs("div", { style: {
                                     display: "flex",
                                     gap: 16,
                                     alignItems: "center",
