@@ -218,7 +218,14 @@ export default function App() {
             setLoading(false);
         }
     }
-    return (_jsxs("div", { style: { padding: 24, fontFamily: "Arial, sans-serif", maxWidth: 900, margin: "0 auto" }, children: [_jsx("h1", { children: "\uD83C\uDFA4 Speech-to-Speech AI Quiz" }), error && (_jsxs("div", { style: {
+    return (_jsxs("div", { style: { padding: 24, fontFamily: "Arial, sans-serif", maxWidth: 900, margin: "0 auto" }, children: [_jsx("h1", { children: "MCS Consolidated assessment Architect readiness bot" }), _jsxs("div", { style: {
+                    marginTop: 8,
+                    marginBottom: 16,
+                    padding: 12,
+                    border: "1px solid #e0e0e0",
+                    borderRadius: 8,
+                    background: "#fafafa"
+                }, children: [_jsxs("p", { style: { marginBottom: 6 }, children: [_jsx("strong", { children: "Bot (CTO of Zava):" }), " I\u2019m concerned about frequent outages impacting our mission-critical application. I\u2019m unhappy with the support quality we\u2019ve received so far and I\u2019m skeptical about the practicality and risks of the recommendations you\u2019ve proposed."] }), _jsxs("p", { children: [_jsx("strong", { children: "You (Microsoft Architect):" }), " Engage, clarify constraints, and address risk, support quality, and implementation concerns. Provide actionable, prioritized steps to improve reliability."] })] }), error && (_jsxs("div", { style: {
                     padding: 12,
                     backgroundColor: "#fee",
                     border: "1px solid #f00",

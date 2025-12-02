@@ -229,7 +229,22 @@ export default function App() {
 
   return (
     <div style={{ padding: 24, fontFamily: "Arial, sans-serif", maxWidth: 900, margin: "0 auto" }}>
-      <h1>🎤 Speech-to-Speech AI Quiz</h1>
+      <h1>MCS Consolidated assessment Architect readiness bot</h1>
+      <div style={{
+        marginTop: 8,
+        marginBottom: 16,
+        padding: 12,
+        border: "1px solid #e0e0e0",
+        borderRadius: 8,
+        background: "#fafafa"
+      }}>
+        <p style={{ marginBottom: 6 }}>
+          <strong>Bot (CTO of Zava):</strong> I’m concerned about frequent outages impacting our mission-critical application. I’m unhappy with the support quality we’ve received so far and I’m skeptical about the practicality and risks of the recommendations you’ve proposed.
+        </p>
+        <p>
+          <strong>You (Microsoft Architect):</strong> Engage, clarify constraints, and address risk, support quality, and implementation concerns. Provide actionable, prioritized steps to improve reliability.
+        </p>
+      </div>
 
       {error && (
         <div
