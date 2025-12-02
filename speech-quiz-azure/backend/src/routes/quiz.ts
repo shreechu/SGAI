@@ -6,13 +6,14 @@ import evaluateController from "../services/evaluate";
 import { saveSession } from "../services/store";
 
 const router = Router();
-const QUESTIONS_PATH = path.resolve(__dirname, "../../scripts/questions.json");
+const QUESTIONS_PATH = path.resolve(process.cwd(), "../scripts/questions.json");
 let questions: any[] = [];
 try {
   questions = JSON.parse(readFileSync(QUESTIONS_PATH, "utf8"));
 } catch {
   questions = [];
 }
+console.log("Loaded questions from", QUESTIONS_PATH, "count=", questions.length);
 
 // Next question endpoint
 router.get("/nextquestion", (req, res) => {

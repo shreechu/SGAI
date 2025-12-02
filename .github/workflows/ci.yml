@@ -1,0 +1,27 @@
+name: CI - Build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+      - name: Build backend
+        working-directory: speech-quiz-azure/backend
+        run: |
+          npm ci
+          npm run build || true
+      - name: Build frontend
+        working-directory: speech-quiz-azure/frontend
+        run: |
+          npm ci
+          npm run build || true

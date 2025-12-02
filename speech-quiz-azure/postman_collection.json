@@ -1,0 +1,54 @@
+{
+  "info": {
+    "name": "Speech Quiz API",
+    "_postman_id": "00000000-0000-0000-0000-000000000000",
+    "description": "Basic requests for the speech-quiz backend",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:7071/health",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "7071",
+          "path": ["health"]
+        }
+      }
+    },
+    {
+      "name": "Next Question",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:7071/api/nextquestion?idx=0",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "7071",
+          "path": ["api","nextquestion"],
+          "query": [{"key":"idx","value":"0"}]
+        }
+      }
+    },
+    {
+      "name": "Evaluate Answer",
+      "request": {
+        "method": "POST",
+        "header": [{"key":"Content-Type","value":"application/json"}],
+        "body": {"mode":"raw","raw":"{\n  \"transcript\": \"Sample answer text...\",\n  \"question\": {\"id\":\"q1\", \"question\": \"Describe three key achievements...\", \"key_phrases\": [\"pyramids\"] }\n}"},
+        "url": {
+          "raw": "http://localhost:7071/api/evaluate",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "7071",
+          "path": ["api","evaluate"]
+        }
+      }
+    }
+  ]
+}
