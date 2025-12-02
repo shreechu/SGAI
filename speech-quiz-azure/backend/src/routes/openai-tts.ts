@@ -1,11 +1,11 @@
 import { Router } from "express";
-import OpenAI from "openai";
+import * as sdk from "microsoft-cognitiveservices-speech-sdk";
 import { getSecret } from "../utils/secrets";
 
 const router = Router();
 
-// OpenAI text-to-speech endpoint
-router.post("/openai/tts", async (req, res) => {
+// Azure Neural TTS endpoint using Speech SDK
+router.post("/tts", async (req, res) => {
   try {
     const { text } = req.body;
     
@@ -13,33 +13,63 @@ router.post("/openai/tts", async (req, res) => {
       return res.status(400).json({ error: "Text is required" });
     }
 
-    // Get OpenAI API key
-    const apiKey = process.env.OPENAI_API_KEY || await getSecret("OPENAI_API_KEY");
+    // Get Azure Speech credentials
+    const speechKey = process.env.SPEECH_KEY || await getSecret("SPEECH_KEY");
+    const speechRegion = process.env.SPEECH_REGION || "eastus";
     
-    if (!apiKey) {
-      return res.status(500).json({ error: "OpenAI API key not configured" });
+    if (!speechKey || speechKey === "YOUR_SPEECH_KEY_HERE") {
+      return res.status(500).json({ error: "Azure Speech key not configured" });
     }
 
-    const openai = new OpenAI({ apiKey });
+    // Configure Speech SDK for audio generation
+    const speechConfig = sdk.SpeechConfig.fromSubscription(speechKey, speechRegion);
+    speechConfig.speechSynthesisVoiceName = "en-US-AndrewMultilingualNeural";
+    speechConfig.speechSynthesisOutputFormat = sdk.SpeechSynthesisOutputFormat.Audio24Khz96KBitRateMonoMp3;
 
-    // Use GPT-4 Audio with the most natural voice
-    const mp3 = await openai.audio.speech.create({
-      model: "tts-1-hd", // High-quality model
-      voice: "onyx", // Deep, warm male voice - most natural
-      input: text,
-      speed: 0.95, // Slightly slower for clarity
+    // Create SSML for enhanced prosody
+    const ssml = `<?xml version="1.0" encoding="UTF-8"?>
+<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="en-US">
+  <voice name="en-US-AndrewMultilingualNeural">
+    <mstts:express-as style="friendly" styledegree="2">
+      <prosody rate="0.95" pitch="+0%" volume="+5%">
+        ${text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}
+      </prosody>
+    </mstts:express-as>
+  </voice>
+</speak>`;
+
+    // Synthesize to memory
+    const synthesizer = new sdk.SpeechSynthesizer(speechConfig, undefined as any);
+    
+    const result = await new Promise<sdk.SpeechSynthesisResult>((resolve, reject) => {
+      synthesizer.speakSsmlAsync(
+        ssml,
+        result => {
+          synthesizer.close();
+          resolve(result);
+        },
+        error => {
+          synthesizer.close();
+          reject(error);
+        }
+      );
     });
 
-    const buffer = Buffer.from(await mp3.arrayBuffer());
+    if (result.reason === sdk.ResultReason.SynthesizingAudioCompleted) {
+      const audioData = result.audioData;
+      
+      res.set({
+        'Content-Type': 'audio/mpeg',
+        'Content-Length': audioData.byteLength,
+      });
+      
+      res.send(Buffer.from(audioData));
+    } else {
+      throw new Error(`Speech synthesis failed: ${result.errorDetails}`);
+    }
     
-    res.set({
-      'Content-Type': 'audio/mpeg',
-      'Content-Length': buffer.length,
-    });
-    
-    res.send(buffer);
   } catch (err: any) {
-    console.error("OpenAI TTS error:", err);
+    console.error("Azure Neural TTS error:", err);
     res.status(500).json({ error: err.message || "Failed to generate speech" });
   }
 });
