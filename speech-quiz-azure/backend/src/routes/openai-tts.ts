@@ -1,10 +1,10 @@
 import { Router } from "express";
-import * as sdk from "microsoft-cognitiveservices-speech-sdk";
+import axios from "axios";
 import { getSecret } from "../utils/secrets";
 
 const router = Router();
 
-// Azure Neural TTS endpoint using Speech SDK
+// Azure Neural TTS endpoint using REST API
 router.post("/tts", async (req, res) => {
   try {
     const { text } = req.body;
@@ -21,56 +21,46 @@ router.post("/tts", async (req, res) => {
       return res.status(500).json({ error: "Azure Speech key not configured" });
     }
 
-    // Configure Speech SDK for audio generation
-    const speechConfig = sdk.SpeechConfig.fromSubscription(speechKey, speechRegion);
-    speechConfig.speechSynthesisVoiceName = "en-US-AndrewMultilingualNeural";
-    speechConfig.speechSynthesisOutputFormat = sdk.SpeechSynthesisOutputFormat.Audio24Khz96KBitRateMonoMp3;
-
     // Create SSML for enhanced prosody
-    const ssml = `<?xml version="1.0" encoding="UTF-8"?>
-<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="en-US">
-  <voice name="en-US-AndrewMultilingualNeural">
-    <mstts:express-as style="friendly" styledegree="2">
-      <prosody rate="0.95" pitch="+0%" volume="+5%">
-        ${text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}
+    const ssml = `<speak version='1.0' xml:lang='en-US' xmlns='http://www.w3.org/2001/10/synthesis' xmlns:mstts='https://www.w3.org/2001/mstts'>
+  <voice name='en-US-AndrewMultilingualNeural'>
+    <mstts:express-as style='friendly' styledegree='2'>
+      <prosody rate='0.95' pitch='+0%' volume='+5%'>
+        ${text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/'/g, "&apos;").replace(/"/g, "&quot;")}
       </prosody>
     </mstts:express-as>
   </voice>
 </speak>`;
 
-    // Synthesize to memory
-    const synthesizer = new sdk.SpeechSynthesizer(speechConfig, undefined as any);
-    
-    const result = await new Promise<sdk.SpeechSynthesisResult>((resolve, reject) => {
-      synthesizer.speakSsmlAsync(
-        ssml,
-        result => {
-          synthesizer.close();
-          resolve(result);
+    // Call Azure Speech REST API
+    const response = await axios.post(
+      `https://${speechRegion}.tts.speech.microsoft.com/cognitiveservices/v1`,
+      ssml,
+      {
+        headers: {
+          'Ocp-Apim-Subscription-Key': speechKey,
+          'Content-Type': 'application/ssml+xml',
+          'X-Microsoft-OutputFormat': 'audio-24khz-96kbitrate-mono-mp3',
+          'User-Agent': 'MissionCriticalQuiz'
         },
-        error => {
-          synthesizer.close();
-          reject(error);
-        }
-      );
-    });
+        responseType: 'arraybuffer'
+      }
+    );
 
-    if (result.reason === sdk.ResultReason.SynthesizingAudioCompleted) {
-      const audioData = result.audioData;
-      
-      res.set({
-        'Content-Type': 'audio/mpeg',
-        'Content-Length': audioData.byteLength,
-      });
-      
-      res.send(Buffer.from(audioData));
-    } else {
-      throw new Error(`Speech synthesis failed: ${result.errorDetails}`);
-    }
+    const buffer = Buffer.from(response.data);
+    
+    res.set({
+      'Content-Type': 'audio/mpeg',
+      'Content-Length': buffer.length,
+    });
+    
+    res.send(buffer);
     
   } catch (err: any) {
-    console.error("Azure Neural TTS error:", err);
-    res.status(500).json({ error: err.message || "Failed to generate speech" });
+    console.error("Azure Neural TTS error:", err.response?.data || err.message);
+    res.status(500).json({ 
+      error: err.response?.data?.message || err.message || "Failed to generate speech" 
+    });
   }
 });
 

@@ -205,7 +205,18 @@ export default function App() {
                     catch { }
                 };
                 recognizerRef.current.canceled = (_s, e) => {
-                    setError(`Recognition canceled: ${e?.errorDetails || "unknown"}`);
+                    const errorDetails = e?.errorDetails || "";
+                    const reason = e?.reason;
+                    // Only show error if it's not a normal user cancellation
+                    if (reason !== 3) { // 3 = EndOfStream (normal stop)
+                        console.error("Recognition canceled:", errorDetails, "Reason:", reason);
+                        if (errorDetails.includes("1006") || errorDetails.includes("websocket")) {
+                            setError("Unable to connect to Azure Speech service. Using browser fallback.");
+                        }
+                        else if (errorDetails) {
+                            setError(`Recognition canceled: ${errorDetails}`);
+                        }
+                    }
                     setListening(false);
                     setContinuousListening(false);
                     try {
@@ -249,8 +260,27 @@ export default function App() {
                     catch { }
                 };
                 rec.onerror = (e) => {
-                    console.error(e);
-                    setError(`Recognition error: ${e?.error || "unknown"}`);
+                    console.error("Speech recognition error:", e);
+                    const errorType = e?.error || "unknown";
+                    // Handle common errors more gracefully
+                    if (errorType === "aborted") {
+                        // Aborted is normal when user stops manually - don't show error
+                        console.log("Recognition was stopped by user");
+                    }
+                    else if (errorType === "no-speech") {
+                        setError("No speech detected. Please try speaking again.");
+                    }
+                    else if (errorType === "audio-capture") {
+                        setError("Microphone not accessible. Please check permissions.");
+                    }
+                    else if (errorType === "not-allowed") {
+                        setError("Microphone permission denied. Please allow microphone access.");
+                    }
+                    else {
+                        setError(`Recognition error: ${errorType}`);
+                    }
+                    setListening(false);
+                    setContinuousListening(false);
                 };
                 rec.onend = () => { setListening(false); setContinuousListening(false); };
                 rec.start();
