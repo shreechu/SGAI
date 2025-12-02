@@ -260,6 +260,15 @@ function AppContent() {
     try {
       setLoading(true);
       setError(null);
+      
+      // Stop any ongoing listening/speaking
+      if (listening) {
+        onStopListening();
+      }
+      if (speaking || currentAudio) {
+        stopSpeaking();
+      }
+      
       const resp = await axios.get(`/api/nextquestion?idx=${i}`);
       setQuestion(resp.data.question);
       setIdx(resp.data.nextIndex);
