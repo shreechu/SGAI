@@ -52,7 +52,7 @@ export default function App() {
         }
         catch { }
     }, []);
-    // Rebuild Azure synthesizer when voice changes
+    // Rebuild Azure synthesizer when voice or style changes
     useEffect(() => {
         if (!azureReady || !tokenRef.current)
             return;
@@ -70,7 +70,7 @@ export default function App() {
             synthesizerRef.current = new SpeechSDK.SpeechSynthesizer(speechConfig);
         }
         catch { }
-    }, [azureVoiceName, azureReady]);
+    }, [azureVoiceName, azureVoiceStyle, azureReady]);
     async function fetchToken() {
         try {
             const resp = await axios.get("/api/speech/token");
@@ -142,6 +142,23 @@ export default function App() {
         }
         setSpeaking(false);
         setError("No TTS available. Configure Azure Speech or use a browser with speechSynthesis support.");
+    }
+    function pauseOrResumeSpeaking() {
+        try {
+            if (typeof window !== "undefined" && window.speechSynthesis) {
+                if (window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
+                    window.speechSynthesis.pause();
+                }
+                else if (window.speechSynthesis.paused) {
+                    window.speechSynthesis.resume();
+                }
+            }
+            // Note: Azure Speech SDK doesn't have built-in pause/resume for TTS
+            // For Azure, we'd need to implement chunking or use stop/restart
+        }
+        catch (err) {
+            console.error("Pause/resume failed:", err);
+        }
     }
     function stopSpeaking() {
         try {
@@ -435,7 +452,9 @@ export default function App() {
                                 }, children: [_jsxs("div", { style: {
                                             marginBottom: 24,
                                             position: "relative"
-                                        }, children: [_jsx("img", { src: "https://api.dicebear.com/7.x/avataaars/svg?seed=Mark&style=circle&backgroundColor=b6e3f4&accessories=prescription01&clothesColor=3c4f5c&eyebrowType=default&eyeType=default&facialHairType=blank&hairColor=auburn&mouthType=smile&skinColor=light&topType=shortHairShortFlat", alt: "Mark - CTO", style: {
+                                        }, children: [_jsx("img", { src: "https://ui-avatars.com/api/?name=Mark+CTO&size=180&background=667eea&color=fff&bold=true&font-size=0.4", alt: "Mark - CTO", onError: (e) => {
+                                                    e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Ccircle cx='90' cy='90' r='90' fill='%23667eea'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dy='.3em' fill='white' font-size='60' font-family='Arial' font-weight='bold'%3EMC%3C/text%3E%3C/svg%3E";
+                                                }, style: {
                                                     width: 180,
                                                     height: 180,
                                                     borderRadius: "50%",
@@ -466,14 +485,14 @@ export default function App() {
                                             textAlign: "center",
                                             maxWidth: 800,
                                             marginBottom: 20
-                                        }, children: question?.question || "Loading question..." }), _jsxs("div", { style: { display: "flex", gap: 12, marginTop: 8 }, children: [_jsx("button", { onClick: onPlayQuestion, disabled: !question || listening || speaking, title: "Play message", style: {
+                                        }, children: question?.question || "Loading question..." }), _jsxs("div", { style: { display: "flex", gap: 12, marginTop: 8 }, children: [_jsx("button", { onClick: speaking ? pauseOrResumeSpeaking : onPlayQuestion, disabled: !question || listening, title: speaking ? "Pause/Resume speaking" : "Play message", style: {
                                                     width: 48,
                                                     height: 48,
-                                                    backgroundColor: speaking ? "#9E9E9E" : "#2196F3",
+                                                    backgroundColor: speaking ? "#FF9800" : "#2196F3",
                                                     color: "white",
                                                     border: "none",
                                                     borderRadius: "50%",
-                                                    cursor: !question || listening || speaking ? "not-allowed" : "pointer",
+                                                    cursor: !question || listening ? "not-allowed" : "pointer",
                                                     fontSize: 20,
                                                     display: "flex",
                                                     alignItems: "center",
@@ -482,12 +501,12 @@ export default function App() {
                                                     transition: "all 200ms",
                                                     opacity: !question || listening ? 0.5 : 1
                                                 }, onMouseEnter: e => {
-                                                    if (!(!question || listening || speaking)) {
+                                                    if (!(!question || listening)) {
                                                         e.currentTarget.style.transform = "scale(1.1)";
                                                     }
                                                 }, onMouseLeave: e => {
                                                     e.currentTarget.style.transform = "scale(1)";
-                                                }, children: speaking ? "⏸" : "▶️" }), speaking && (_jsx("button", { onClick: stopSpeaking, title: "Stop speaking", style: {
+                                                }, children: speaking && typeof window !== "undefined" && window.speechSynthesis?.paused ? "▶️" : speaking ? "⏸" : "▶️" }), speaking && (_jsx("button", { onClick: stopSpeaking, title: "Stop speaking", style: {
                                                     width: 48,
                                                     height: 48,
                                                     backgroundColor: "#f44336",
