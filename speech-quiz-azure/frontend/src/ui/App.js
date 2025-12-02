@@ -56,6 +56,11 @@ export default function App() {
     useEffect(() => {
         if (!azureReady || !tokenRef.current)
             return;
+        // If currently speaking, stop it first
+        const wasPlaying = speaking;
+        if (wasPlaying) {
+            stopSpeaking();
+        }
         try {
             const speechConfig = SpeechSDK.SpeechConfig.fromAuthorizationToken(tokenRef.current.token, tokenRef.current.region);
             speechConfig.speechRecognitionLanguage = "en-US";
@@ -70,6 +75,10 @@ export default function App() {
             synthesizerRef.current = new SpeechSDK.SpeechSynthesizer(speechConfig);
         }
         catch { }
+        // If was playing, restart with new voice
+        if (wasPlaying && question?.question) {
+            setTimeout(() => speakText(question.question), 300);
+        }
     }, [azureVoiceName, azureVoiceStyle, azureReady]);
     async function fetchToken() {
         try {
@@ -431,6 +440,11 @@ export default function App() {
                                 }, children: [_jsxs("label", { style: { display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }, children: [_jsx("input", { type: "checkbox", checked: autoRead, onChange: e => setAutoRead(e.target.checked) }), _jsx("span", { style: { fontSize: 14 }, children: "Auto-read questions" })] }), _jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8 }, children: [_jsx("span", { style: { color: "#555", fontSize: 14, fontWeight: 600 }, children: "Voice:" }), azureReady ? (_jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8 }, children: [_jsx("select", { value: azureVoiceName, onChange: e => setAzureVoiceName(e.target.value), style: { padding: "6px 10px", borderRadius: 6, border: "1px solid #ddd", fontSize: 14 }, children: ["en-US-JennyNeural", "en-US-JaneNeural", "en-US-AvaNeural", "en-US-DavisNeural", "en-US-GuyNeural", "en-GB-LibbyNeural", "en-GB-RyanNeural", "en-AU-NatashaNeural", "en-IN-NeerjaNeural"].map(v => (_jsx("option", { value: v, children: v }, v))) }), _jsx("span", { style: { color: "#555", fontSize: 14, fontWeight: 600 }, children: "Style:" }), _jsx("select", { value: azureVoiceStyle, onChange: e => setAzureVoiceStyle(e.target.value), style: { padding: "6px 10px", borderRadius: 6, border: "1px solid #ddd", fontSize: 14 }, children: ["chat", "customerservice", "newscast-casual", "empathetic"].map(s => (_jsx("option", { value: s, children: s }, s))) })] })) : browserFallbackReady ? (_jsx("select", { value: webVoiceRef.current?.name || "", onChange: e => {
                                                     const v = browserVoices.find(bv => bv.name === e.target.value) || null;
                                                     webVoiceRef.current = v;
+                                                    // If currently speaking with browser speech, restart with new voice
+                                                    if (speaking && typeof window !== "undefined" && window.speechSynthesis && question?.question) {
+                                                        window.speechSynthesis.cancel();
+                                                        setTimeout(() => speakText(question.question), 100);
+                                                    }
                                                 }, style: { padding: "6px 10px", borderRadius: 6, border: "1px solid #ddd", fontSize: 14 }, children: browserVoices.map(v => (_jsxs("option", { value: v.name, children: [v.name, " (", v.lang, ")"] }, v.name))) })) : (_jsx("span", { style: { color: "#999", fontSize: 14 }, children: "Loading voices\u2026" }))] })] }), error && (_jsxs("div", { style: {
                                     padding: 16,
                                     backgroundColor: "#fee",
