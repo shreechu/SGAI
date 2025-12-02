@@ -42,6 +42,11 @@ function AppContent() {
         return saved ? JSON.parse(saved) : { name: '', email: '', technicalConfidence: 5, consultativeConfidence: 5 };
     });
     const [adminSessions, setAdminSessions] = useState([]);
+    // Admin login state
+    const [adminUsername, setAdminUsername] = useState('');
+    const [adminPassword, setAdminPassword] = useState('');
+    const [loginError, setLoginError] = useState('');
+    const [selectedSession, setSelectedSession] = useState(null);
     const [question, setQuestion] = useState(null);
     const [idx, setIdx] = useState(0);
     const [transcript, setTranscript] = useState("");
@@ -97,6 +102,12 @@ function AppContent() {
         if (currentPage === 'quiz') {
             fetchToken();
             fetchQuestion(0);
+        }
+    }, [currentPage]);
+    // Load admin sessions when page becomes 'admin'
+    useEffect(() => {
+        if (currentPage === 'admin') {
+            loadAdminSessions();
         }
     }, [currentPage]);
     // Rebuild Azure synthesizer when voice or style changes
@@ -550,10 +561,12 @@ function AppContent() {
     }
     function handleAdminLogin(username, password) {
         if (username === 'sa' && password === 'test123') {
+            setLoginError('');
             navigateToPage('admin');
             loadAdminSessions();
             return true;
         }
+        setLoginError('Invalid credentials');
         return false;
     }
     function renderLandingPage() {
@@ -655,16 +668,8 @@ function AppContent() {
                             }, children: "\uD83D\uDD10 Admin Login" })] }) }) }));
     }
     function renderAdminLogin() {
-        const [username, setUsername] = useState('');
-        const [password, setPassword] = useState('');
-        const [loginError, setLoginError] = useState('');
         const handleLogin = () => {
-            if (handleAdminLogin(username, password)) {
-                setLoginError('');
-            }
-            else {
-                setLoginError('Invalid credentials');
-            }
+            handleAdminLogin(adminUsername, adminPassword);
         };
         return (_jsx("div", { style: {
                 minHeight: "100vh",
@@ -706,14 +711,14 @@ function AppContent() {
                                 marginBottom: 20,
                                 color: "#c62828",
                                 textAlign: "center"
-                            }, children: loginError })), _jsxs("div", { style: { marginBottom: 20 }, children: [_jsx("label", { style: { display: "block", marginBottom: 8, fontWeight: 600, color: "#37474f" }, children: "Username" }), _jsx("input", { type: "text", value: username, onChange: e => setUsername(e.target.value), placeholder: "Enter username", style: {
+                            }, children: loginError })), _jsxs("div", { style: { marginBottom: 20 }, children: [_jsx("label", { style: { display: "block", marginBottom: 8, fontWeight: 600, color: "#37474f" }, children: "Username" }), _jsx("input", { type: "text", value: adminUsername, onChange: e => setAdminUsername(e.target.value), placeholder: "Enter username", style: {
                                         width: "100%",
                                         padding: "12px 16px",
                                         fontSize: 16,
                                         border: "2px solid #e0e0e0",
                                         borderRadius: 8,
                                         outline: "none"
-                                    }, onKeyPress: e => e.key === 'Enter' && handleLogin() })] }), _jsxs("div", { style: { marginBottom: 24 }, children: [_jsx("label", { style: { display: "block", marginBottom: 8, fontWeight: 600, color: "#37474f" }, children: "Password" }), _jsx("input", { type: "password", value: password, onChange: e => setPassword(e.target.value), placeholder: "Enter password", style: {
+                                    }, onKeyPress: e => e.key === 'Enter' && handleLogin() })] }), _jsxs("div", { style: { marginBottom: 24 }, children: [_jsx("label", { style: { display: "block", marginBottom: 8, fontWeight: 600, color: "#37474f" }, children: "Password" }), _jsx("input", { type: "password", value: adminPassword, onChange: e => setAdminPassword(e.target.value), placeholder: "Enter password", style: {
                                         width: "100%",
                                         padding: "12px 16px",
                                         fontSize: 16,
@@ -742,6 +747,93 @@ function AppContent() {
                             }, children: "\u2190 Back to Home" })] }) }) }));
     }
     function renderAdminDashboard() {
+        // If a session is selected, show detailed view
+        if (selectedSession) {
+            return (_jsx("div", { style: {
+                    minHeight: "100vh",
+                    background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                    fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+                    padding: "20px"
+                }, children: _jsx("div", { style: { maxWidth: 1200, margin: "0 auto" }, children: _jsxs("div", { style: {
+                            background: "white",
+                            borderRadius: 20,
+                            boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+                            padding: 32
+                        }, children: [_jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }, children: [_jsx("h1", { style: {
+                                            fontSize: 28,
+                                            fontWeight: 700,
+                                            color: "#1a237e",
+                                            margin: 0
+                                        }, children: "Evaluation Details" }), _jsx("button", { onClick: () => setSelectedSession(null), style: {
+                                            padding: "10px 20px",
+                                            backgroundColor: "#667eea",
+                                            color: "white",
+                                            border: "none",
+                                            borderRadius: 8,
+                                            fontSize: 14,
+                                            fontWeight: 600,
+                                            cursor: "pointer"
+                                        }, children: "\u2190 Back to Dashboard" })] }), _jsx("div", { style: {
+                                    backgroundColor: "#f5f5f5",
+                                    padding: "20px",
+                                    borderRadius: 12,
+                                    marginBottom: 24
+                                }, children: _jsxs("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: 16 }, children: [_jsxs("div", { children: [_jsx("div", { style: { fontSize: 12, color: "#666", marginBottom: 4 }, children: "Architect Name" }), _jsx("div", { style: { fontSize: 18, fontWeight: 700, color: "#1a237e" }, children: selectedSession.userName })] }), _jsxs("div", { children: [_jsx("div", { style: { fontSize: 12, color: "#666", marginBottom: 4 }, children: "Email" }), _jsx("div", { style: { fontSize: 16, fontWeight: 600, color: "#555" }, children: selectedSession.userEmail })] }), _jsxs("div", { children: [_jsx("div", { style: { fontSize: 12, color: "#666", marginBottom: 4 }, children: "Overall Score" }), _jsxs("div", { style: { fontSize: 24, fontWeight: 700, color: selectedSession.overallScore >= 70 ? "#4CAF50" : selectedSession.overallScore >= 50 ? "#FF9800" : "#f44336" }, children: [selectedSession.overallScore, "%"] })] }), _jsxs("div", { children: [_jsx("div", { style: { fontSize: 12, color: "#666", marginBottom: 4 }, children: "Evaluation Date" }), _jsxs("div", { style: { fontSize: 16, fontWeight: 600, color: "#555" }, children: [new Date(selectedSession.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }), ' at ', new Date(selectedSession.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })] })] })] }) }), _jsx("h2", { style: { fontSize: 20, fontWeight: 700, color: "#1a237e", marginBottom: 16 }, children: "Question-by-Question Analysis" }), selectedSession.results && selectedSession.results.length > 0 ? (_jsx("div", { style: { display: "flex", flexDirection: "column", gap: 16 }, children: selectedSession.results.map((result, idx) => (_jsxs("div", { style: {
+                                        border: "2px solid #e0e0e0",
+                                        borderRadius: 12,
+                                        padding: 20,
+                                        backgroundColor: "#fafafa"
+                                    }, children: [_jsxs("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: 12 }, children: [_jsxs("div", { children: [_jsx("div", { style: { fontSize: 12, color: "#666", marginBottom: 4 }, children: result.topic || 'Question ' + (idx + 1) }), _jsx("h3", { style: { fontSize: 16, fontWeight: 700, color: "#1a237e", margin: 0 }, children: result.heading || result.questionId })] }), _jsxs("span", { style: {
+                                                        backgroundColor: (result.evaluation?.score || 0) >= 70
+                                                            ? "#4CAF50"
+                                                            : (result.evaluation?.score || 0) >= 50
+                                                                ? "#FF9800"
+                                                                : "#f44336",
+                                                        color: "white",
+                                                        padding: "6px 16px",
+                                                        borderRadius: 16,
+                                                        fontSize: 14,
+                                                        fontWeight: 700
+                                                    }, children: [result.evaluation?.score || 0, "%"] })] }), result.evaluation?.feedback && (_jsxs("div", { style: { marginBottom: 12 }, children: [_jsx("div", { style: { fontSize: 13, fontWeight: 600, color: "#1a237e", marginBottom: 6 }, children: "\uD83D\uDCCB Technical Feedback" }), _jsx("div", { style: { fontSize: 14, color: "#555", lineHeight: 1.6 }, children: result.evaluation.feedback })] })), result.evaluation?.sentiment && (_jsxs("div", { style: { marginBottom: 12 }, children: [_jsx("div", { style: { fontSize: 13, fontWeight: 600, color: "#1a237e", marginBottom: 8 }, children: "\uD83D\uDCAC Communication Assessment" }), _jsxs("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }, children: [_jsxs("div", { children: [_jsx("div", { style: { fontSize: 11, color: "#666", marginBottom: 4 }, children: "Confidence" }), _jsxs("div", { style: {
+                                                                        fontSize: 16,
+                                                                        fontWeight: 700,
+                                                                        color: result.evaluation.sentiment.confidence >= 70 ? "#4CAF50" : result.evaluation.sentiment.confidence >= 50 ? "#FF9800" : "#f44336"
+                                                                    }, children: [result.evaluation.sentiment.confidence, "/100"] })] }), _jsxs("div", { children: [_jsx("div", { style: { fontSize: 11, color: "#666", marginBottom: 4 }, children: "Empathy" }), _jsxs("div", { style: {
+                                                                        fontSize: 16,
+                                                                        fontWeight: 700,
+                                                                        color: result.evaluation.sentiment.empathy >= 70 ? "#4CAF50" : result.evaluation.sentiment.empathy >= 50 ? "#FF9800" : "#f44336"
+                                                                    }, children: [result.evaluation.sentiment.empathy, "/100"] })] }), _jsxs("div", { children: [_jsx("div", { style: { fontSize: 11, color: "#666", marginBottom: 4 }, children: "Executive Presence" }), _jsxs("div", { style: {
+                                                                        fontSize: 16,
+                                                                        fontWeight: 700,
+                                                                        color: result.evaluation.sentiment.executive_presence >= 70 ? "#4CAF50" : result.evaluation.sentiment.executive_presence >= 50 ? "#FF9800" : "#f44336"
+                                                                    }, children: [result.evaluation.sentiment.executive_presence, "/100"] })] }), _jsxs("div", { children: [_jsx("div", { style: { fontSize: 11, color: "#666", marginBottom: 4 }, children: "Professionalism" }), _jsxs("div", { style: {
+                                                                        fontSize: 16,
+                                                                        fontWeight: 700,
+                                                                        color: result.evaluation.sentiment.professionalism >= 70 ? "#4CAF50" : result.evaluation.sentiment.professionalism >= 50 ? "#FF9800" : "#f44336"
+                                                                    }, children: [result.evaluation.sentiment.professionalism, "/100"] })] })] })] })), result.evaluation?.sentiment_feedback && (_jsxs("div", { style: {
+                                                backgroundColor: "#fff3e0",
+                                                padding: 12,
+                                                borderRadius: 8,
+                                                fontSize: 13,
+                                                color: "#e65100",
+                                                lineHeight: 1.5
+                                            }, children: ["\uD83D\uDCA1 ", result.evaluation.sentiment_feedback] })), _jsxs("div", { style: { marginTop: 12, display: "flex", gap: 16, flexWrap: "wrap" }, children: [result.evaluation?.matched_phrases && result.evaluation.matched_phrases.length > 0 && (_jsxs("div", { children: [_jsxs("div", { style: { fontSize: 11, color: "#4CAF50", fontWeight: 600, marginBottom: 6 }, children: ["\u2713 Matched Phrases (", result.evaluation.matched_phrases.length, ")"] }), _jsx("div", { style: { display: "flex", gap: 6, flexWrap: "wrap" }, children: result.evaluation.matched_phrases.map((phrase, i) => (_jsx("span", { style: {
+                                                                    backgroundColor: "#e8f5e9",
+                                                                    color: "#2e7d32",
+                                                                    padding: "4px 10px",
+                                                                    borderRadius: 12,
+                                                                    fontSize: 12,
+                                                                    fontWeight: 500
+                                                                }, children: phrase }, i))) })] })), result.evaluation?.missing_phrases && result.evaluation.missing_phrases.length > 0 && (_jsxs("div", { children: [_jsxs("div", { style: { fontSize: 11, color: "#f44336", fontWeight: 600, marginBottom: 6 }, children: ["\u2717 Missing Phrases (", result.evaluation.missing_phrases.length, ")"] }), _jsx("div", { style: { display: "flex", gap: 6, flexWrap: "wrap" }, children: result.evaluation.missing_phrases.map((phrase, i) => (_jsx("span", { style: {
+                                                                    backgroundColor: "#ffebee",
+                                                                    color: "#c62828",
+                                                                    padding: "4px 10px",
+                                                                    borderRadius: 12,
+                                                                    fontSize: 12,
+                                                                    fontWeight: 500
+                                                                }, children: phrase }, i))) })] }))] })] }, idx))) })) : (_jsx("div", { style: { padding: 40, textAlign: "center", color: "#999" }, children: "No detailed results available" }))] }) }) }));
+        }
+        // Main dashboard view
         return (_jsx("div", { style: {
                 minHeight: "100vh",
                 background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
@@ -766,7 +858,12 @@ function AppContent() {
                                                 fontSize: 14,
                                                 fontWeight: 600,
                                                 cursor: "pointer"
-                                            }, children: "\uD83C\uDFE0 Home" }), _jsx("button", { onClick: () => navigateToPage('landing'), style: {
+                                            }, children: "\uD83C\uDFE0 Home" }), _jsx("button", { onClick: () => {
+                                                setAdminUsername('');
+                                                setAdminPassword('');
+                                                setLoginError('');
+                                                navigateToPage('landing');
+                                            }, style: {
                                                 padding: "10px 20px",
                                                 backgroundColor: "#f44336",
                                                 color: "white",
@@ -775,32 +872,48 @@ function AppContent() {
                                                 fontSize: 14,
                                                 fontWeight: 600,
                                                 cursor: "pointer"
-                                            }, children: "Logout" })] })] }), _jsxs("p", { style: { color: "#666", marginBottom: 24 }, children: ["Total Sessions: ", _jsx("strong", { children: adminSessions.length })] }), _jsx("div", { style: { overflowX: "auto" }, children: _jsxs("table", { style: {
+                                            }, children: "Logout" })] })] }), _jsxs("div", { style: {
+                                backgroundColor: "#f5f5f5",
+                                padding: "16px 20px",
+                                borderRadius: 12,
+                                marginBottom: 24,
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 12
+                            }, children: [_jsx("span", { style: { fontSize: 24 }, children: "\uD83D\uDCCA" }), _jsxs("span", { style: { color: "#666", fontSize: 16 }, children: ["Total Evaluations: ", _jsx("strong", { style: { color: "#1a237e", fontSize: 18 }, children: adminSessions.length })] })] }), _jsx("div", { style: { overflowX: "auto" }, children: _jsxs("table", { style: {
                                     width: "100%",
                                     borderCollapse: "collapse",
                                     fontSize: 14
-                                }, children: [_jsx("thead", { children: _jsxs("tr", { style: { backgroundColor: "#f5f5f5" }, children: [_jsx("th", { style: { padding: 12, textAlign: "left", borderBottom: "2px solid #ddd" }, children: "Date" }), _jsx("th", { style: { padding: 12, textAlign: "left", borderBottom: "2px solid #ddd" }, children: "Name" }), _jsx("th", { style: { padding: 12, textAlign: "left", borderBottom: "2px solid #ddd" }, children: "Email" }), _jsx("th", { style: { padding: 12, textAlign: "center", borderBottom: "2px solid #ddd" }, children: "Technical Conf." }), _jsx("th", { style: { padding: 12, textAlign: "center", borderBottom: "2px solid #ddd" }, children: "Consultative Conf." }), _jsx("th", { style: { padding: 12, textAlign: "center", borderBottom: "2px solid #ddd" }, children: "Overall Score" })] }) }), _jsx("tbody", { children: adminSessions.length === 0 ? (_jsx("tr", { children: _jsx("td", { colSpan: 6, style: { padding: 24, textAlign: "center", color: "#999" }, children: "No sessions recorded yet" }) })) : (adminSessions.map((session, idx) => (_jsxs("tr", { style: { borderBottom: "1px solid #eee" }, children: [_jsxs("td", { style: { padding: 12 }, children: [new Date(session.timestamp).toLocaleDateString(), " ", new Date(session.timestamp).toLocaleTimeString()] }), _jsx("td", { style: { padding: 12, fontWeight: 600 }, children: session.userName }), _jsx("td", { style: { padding: 12 }, children: session.userEmail }), _jsx("td", { style: { padding: 12, textAlign: "center" }, children: _jsxs("span", { style: {
-                                                            backgroundColor: session.technicalConfidence >= 7 ? "#4CAF50" : session.technicalConfidence >= 4 ? "#FF9800" : "#f44336",
+                                }, children: [_jsx("thead", { children: _jsxs("tr", { style: { backgroundColor: "#1a237e" }, children: [_jsx("th", { style: { padding: "14px 12px", textAlign: "left", color: "white", fontWeight: 600, borderBottom: "3px solid #667eea" }, children: "Architect Name" }), _jsx("th", { style: { padding: "14px 12px", textAlign: "left", color: "white", fontWeight: 600, borderBottom: "3px solid #667eea" }, children: "Email ID" }), _jsx("th", { style: { padding: "14px 12px", textAlign: "center", color: "white", fontWeight: 600, borderBottom: "3px solid #667eea" }, children: "Evaluation Score" }), _jsx("th", { style: { padding: "14px 12px", textAlign: "center", color: "white", fontWeight: 600, borderBottom: "3px solid #667eea" }, children: "Date & Time" })] }) }), _jsx("tbody", { children: adminSessions.length === 0 ? (_jsx("tr", { children: _jsx("td", { colSpan: 4, style: { padding: 32, textAlign: "center", color: "#999", fontSize: 16 }, children: "\uD83D\uDCED No evaluations recorded yet" }) })) : (adminSessions.map((session, idx) => (_jsxs("tr", { onClick: () => setSelectedSession(session), style: {
+                                                borderBottom: "1px solid #e0e0e0",
+                                                backgroundColor: idx % 2 === 0 ? "#fafafa" : "white",
+                                                cursor: "pointer",
+                                                transition: "background-color 0.2s"
+                                            }, onMouseEnter: e => {
+                                                e.currentTarget.style.backgroundColor = "#e3f2fd";
+                                            }, onMouseLeave: e => {
+                                                e.currentTarget.style.backgroundColor = idx % 2 === 0 ? "#fafafa" : "white";
+                                            }, children: [_jsx("td", { style: { padding: "14px 12px", fontWeight: 600, color: "#1a237e" }, children: session.userName }), _jsx("td", { style: { padding: "14px 12px", color: "#555" }, children: session.userEmail }), _jsx("td", { style: { padding: "14px 12px", textAlign: "center" }, children: _jsxs("span", { style: {
+                                                            backgroundColor: session.overallScore >= 70
+                                                                ? "#4CAF50"
+                                                                : session.overallScore >= 50
+                                                                    ? "#FF9800"
+                                                                    : "#f44336",
                                                             color: "white",
-                                                            padding: "4px 12px",
-                                                            borderRadius: 12,
-                                                            fontSize: 13,
-                                                            fontWeight: 600
-                                                        }, children: [session.technicalConfidence, "/10"] }) }), _jsx("td", { style: { padding: 12, textAlign: "center" }, children: _jsxs("span", { style: {
-                                                            backgroundColor: session.consultativeConfidence >= 7 ? "#4CAF50" : session.consultativeConfidence >= 4 ? "#FF9800" : "#f44336",
-                                                            color: "white",
-                                                            padding: "4px 12px",
-                                                            borderRadius: 12,
-                                                            fontSize: 13,
-                                                            fontWeight: 600
-                                                        }, children: [session.consultativeConfidence, "/10"] }) }), _jsx("td", { style: { padding: 12, textAlign: "center" }, children: _jsxs("span", { style: {
-                                                            backgroundColor: session.overallScore >= 70 ? "#4CAF50" : session.overallScore >= 40 ? "#FF9800" : "#f44336",
-                                                            color: "white",
-                                                            padding: "4px 16px",
-                                                            borderRadius: 12,
-                                                            fontSize: 14,
-                                                            fontWeight: 700
-                                                        }, children: [session.overallScore, "%"] }) })] }, idx)))) })] }) })] }) }) }));
+                                                            padding: "6px 20px",
+                                                            borderRadius: 20,
+                                                            fontSize: 16,
+                                                            fontWeight: 700,
+                                                            display: "inline-block",
+                                                            minWidth: 60
+                                                        }, children: [session.overallScore, "%"] }) }), _jsx("td", { style: { padding: "14px 12px", textAlign: "center", color: "#666" }, children: _jsxs("div", { style: { display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }, children: [_jsx("span", { style: { fontWeight: 600, color: "#1a237e" }, children: new Date(session.timestamp).toLocaleDateString('en-US', {
+                                                                    month: 'short',
+                                                                    day: 'numeric',
+                                                                    year: 'numeric'
+                                                                }) }), _jsx("span", { style: { fontSize: 12, color: "#999" }, children: new Date(session.timestamp).toLocaleTimeString('en-US', {
+                                                                    hour: '2-digit',
+                                                                    minute: '2-digit'
+                                                                }) })] }) })] }, idx)))) })] }) })] }) }) }));
     }
     function renderConfirmSubmissionPage() {
         const unansweredCount = seenQuestions.filter(q => !answers[q.id]).length;

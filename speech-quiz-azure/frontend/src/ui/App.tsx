@@ -77,6 +77,12 @@ function AppContent() {
   });
   const [adminSessions, setAdminSessions] = useState<SessionResult[]>([]);
   
+  // Admin login state
+  const [adminUsername, setAdminUsername] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [selectedSession, setSelectedSession] = useState<SessionResult | null>(null);
+  
   const [question, setQuestion] = useState<Question | null>(null);
   const [idx, setIdx] = useState(0);
   const [transcript, setTranscript] = useState("");
@@ -134,6 +140,13 @@ function AppContent() {
     if (currentPage === 'quiz') {
       fetchToken();
       fetchQuestion(0);
+    }
+  }, [currentPage]);
+
+  // Load admin sessions when page becomes 'admin'
+  useEffect(() => {
+    if (currentPage === 'admin') {
+      loadAdminSessions();
     }
   }, [currentPage]);
 
@@ -595,10 +608,12 @@ function AppContent() {
 
   function handleAdminLogin(username: string, password: string) {
     if (username === 'sa' && password === 'test123') {
+      setLoginError('');
       navigateToPage('admin');
       loadAdminSessions();
       return true;
     }
+    setLoginError('Invalid credentials');
     return false;
   }
 
@@ -810,16 +825,8 @@ function AppContent() {
   }
 
   function renderAdminLogin() {
-    const [username, setUsername] = useState('');
-    const [password, setPassword] = useState('');
-    const [loginError, setLoginError] = useState('');
-
     const handleLogin = () => {
-      if (handleAdminLogin(username, password)) {
-        setLoginError('');
-      } else {
-        setLoginError('Invalid credentials');
-      }
+      handleAdminLogin(adminUsername, adminPassword);
     };
 
     return (
@@ -888,8 +895,8 @@ function AppContent() {
               </label>
               <input
                 type="text"
-                value={username}
-                onChange={e => setUsername(e.target.value)}
+                value={adminUsername}
+                onChange={e => setAdminUsername(e.target.value)}
                 placeholder="Enter username"
                 style={{
                   width: "100%",
@@ -909,8 +916,8 @@ function AppContent() {
               </label>
               <input
                 type="password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
+                value={adminPassword}
+                onChange={e => setAdminPassword(e.target.value)}
                 placeholder="Enter password"
                 style={{
                   width: "100%",
@@ -963,6 +970,254 @@ function AppContent() {
   }
 
   function renderAdminDashboard() {
+    // If a session is selected, show detailed view
+    if (selectedSession) {
+      return (
+        <div style={{ 
+          minHeight: "100vh", 
+          background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+          fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+          padding: "20px"
+        }}>
+          <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+            <div style={{
+              background: "white",
+              borderRadius: 20,
+              boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+              padding: 32
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+                <h1 style={{ 
+                  fontSize: 28, 
+                  fontWeight: 700,
+                  color: "#1a237e",
+                  margin: 0
+                }}>
+                  Evaluation Details
+                </h1>
+                <button
+                  onClick={() => setSelectedSession(null)}
+                  style={{
+                    padding: "10px 20px",
+                    backgroundColor: "#667eea",
+                    color: "white",
+                    border: "none",
+                    borderRadius: 8,
+                    fontSize: 14,
+                    fontWeight: 600,
+                    cursor: "pointer"
+                  }}
+                >
+                  ← Back to Dashboard
+                </button>
+              </div>
+
+              {/* Architect Info */}
+              <div style={{ 
+                backgroundColor: "#f5f5f5", 
+                padding: "20px", 
+                borderRadius: 12,
+                marginBottom: 24
+              }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: 16 }}>
+                  <div>
+                    <div style={{ fontSize: 12, color: "#666", marginBottom: 4 }}>Architect Name</div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: "#1a237e" }}>{selectedSession.userName}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 12, color: "#666", marginBottom: 4 }}>Email</div>
+                    <div style={{ fontSize: 16, fontWeight: 600, color: "#555" }}>{selectedSession.userEmail}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 12, color: "#666", marginBottom: 4 }}>Overall Score</div>
+                    <div style={{ fontSize: 24, fontWeight: 700, color: selectedSession.overallScore >= 70 ? "#4CAF50" : selectedSession.overallScore >= 50 ? "#FF9800" : "#f44336" }}>
+                      {selectedSession.overallScore}%
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 12, color: "#666", marginBottom: 4 }}>Evaluation Date</div>
+                    <div style={{ fontSize: 16, fontWeight: 600, color: "#555" }}>
+                      {new Date(selectedSession.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      {' at '}
+                      {new Date(selectedSession.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Question-by-Question Results */}
+              <h2 style={{ fontSize: 20, fontWeight: 700, color: "#1a237e", marginBottom: 16 }}>Question-by-Question Analysis</h2>
+              {selectedSession.results && selectedSession.results.length > 0 ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                  {selectedSession.results.map((result, idx) => (
+                    <div key={idx} style={{
+                      border: "2px solid #e0e0e0",
+                      borderRadius: 12,
+                      padding: 20,
+                      backgroundColor: "#fafafa"
+                    }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: 12 }}>
+                        <div>
+                          <div style={{ fontSize: 12, color: "#666", marginBottom: 4 }}>
+                            {result.topic || 'Question ' + (idx + 1)}
+                          </div>
+                          <h3 style={{ fontSize: 16, fontWeight: 700, color: "#1a237e", margin: 0 }}>
+                            {result.heading || result.questionId}
+                          </h3>
+                        </div>
+                        <span style={{
+                          backgroundColor: (result.evaluation?.score || 0) >= 70 
+                            ? "#4CAF50" 
+                            : (result.evaluation?.score || 0) >= 50 
+                            ? "#FF9800" 
+                            : "#f44336",
+                          color: "white",
+                          padding: "6px 16px",
+                          borderRadius: 16,
+                          fontSize: 14,
+                          fontWeight: 700
+                        }}>
+                          {result.evaluation?.score || 0}%
+                        </span>
+                      </div>
+
+                      {/* Technical Feedback */}
+                      {result.evaluation?.feedback && (
+                        <div style={{ marginBottom: 12 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: "#1a237e", marginBottom: 6 }}>
+                            📋 Technical Feedback
+                          </div>
+                          <div style={{ fontSize: 14, color: "#555", lineHeight: 1.6 }}>
+                            {result.evaluation.feedback}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Sentiment Analysis */}
+                      {result.evaluation?.sentiment && (
+                        <div style={{ marginBottom: 12 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: "#1a237e", marginBottom: 8 }}>
+                            💬 Communication Assessment
+                          </div>
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
+                            <div>
+                              <div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>Confidence</div>
+                              <div style={{ 
+                                fontSize: 16, 
+                                fontWeight: 700,
+                                color: result.evaluation.sentiment.confidence >= 70 ? "#4CAF50" : result.evaluation.sentiment.confidence >= 50 ? "#FF9800" : "#f44336"
+                              }}>
+                                {result.evaluation.sentiment.confidence}/100
+                              </div>
+                            </div>
+                            <div>
+                              <div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>Empathy</div>
+                              <div style={{ 
+                                fontSize: 16, 
+                                fontWeight: 700,
+                                color: result.evaluation.sentiment.empathy >= 70 ? "#4CAF50" : result.evaluation.sentiment.empathy >= 50 ? "#FF9800" : "#f44336"
+                              }}>
+                                {result.evaluation.sentiment.empathy}/100
+                              </div>
+                            </div>
+                            <div>
+                              <div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>Executive Presence</div>
+                              <div style={{ 
+                                fontSize: 16, 
+                                fontWeight: 700,
+                                color: result.evaluation.sentiment.executive_presence >= 70 ? "#4CAF50" : result.evaluation.sentiment.executive_presence >= 50 ? "#FF9800" : "#f44336"
+                              }}>
+                                {result.evaluation.sentiment.executive_presence}/100
+                              </div>
+                            </div>
+                            <div>
+                              <div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>Professionalism</div>
+                              <div style={{ 
+                                fontSize: 16, 
+                                fontWeight: 700,
+                                color: result.evaluation.sentiment.professionalism >= 70 ? "#4CAF50" : result.evaluation.sentiment.professionalism >= 50 ? "#FF9800" : "#f44336"
+                              }}>
+                                {result.evaluation.sentiment.professionalism}/100
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Sentiment Feedback */}
+                      {result.evaluation?.sentiment_feedback && (
+                        <div style={{ 
+                          backgroundColor: "#fff3e0", 
+                          padding: 12, 
+                          borderRadius: 8,
+                          fontSize: 13,
+                          color: "#e65100",
+                          lineHeight: 1.5
+                        }}>
+                          💡 {result.evaluation.sentiment_feedback}
+                        </div>
+                      )}
+
+                      {/* Key Phrases */}
+                      <div style={{ marginTop: 12, display: "flex", gap: 16, flexWrap: "wrap" }}>
+                        {result.evaluation?.matched_phrases && result.evaluation.matched_phrases.length > 0 && (
+                          <div>
+                            <div style={{ fontSize: 11, color: "#4CAF50", fontWeight: 600, marginBottom: 6 }}>
+                              ✓ Matched Phrases ({result.evaluation.matched_phrases.length})
+                            </div>
+                            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                              {result.evaluation.matched_phrases.map((phrase: string, i: number) => (
+                                <span key={i} style={{
+                                  backgroundColor: "#e8f5e9",
+                                  color: "#2e7d32",
+                                  padding: "4px 10px",
+                                  borderRadius: 12,
+                                  fontSize: 12,
+                                  fontWeight: 500
+                                }}>
+                                  {phrase}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {result.evaluation?.missing_phrases && result.evaluation.missing_phrases.length > 0 && (
+                          <div>
+                            <div style={{ fontSize: 11, color: "#f44336", fontWeight: 600, marginBottom: 6 }}>
+                              ✗ Missing Phrases ({result.evaluation.missing_phrases.length})
+                            </div>
+                            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                              {result.evaluation.missing_phrases.map((phrase: string, i: number) => (
+                                <span key={i} style={{
+                                  backgroundColor: "#ffebee",
+                                  color: "#c62828",
+                                  padding: "4px 10px",
+                                  borderRadius: 12,
+                                  fontSize: 12,
+                                  fontWeight: 500
+                                }}>
+                                  {phrase}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ padding: 40, textAlign: "center", color: "#999" }}>
+                  No detailed results available
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Main dashboard view
     return (
       <div style={{ 
         minHeight: "100vh", 
@@ -1003,7 +1258,12 @@ function AppContent() {
                   🏠 Home
                 </button>
                 <button
-                  onClick={() => navigateToPage('landing')}
+                  onClick={() => {
+                    setAdminUsername('');
+                    setAdminPassword('');
+                    setLoginError('');
+                    navigateToPage('landing');
+                  }}
                   style={{
                     padding: "10px 20px",
                     backgroundColor: "#f44336",
@@ -1020,9 +1280,20 @@ function AppContent() {
               </div>
             </div>
 
-            <p style={{ color: "#666", marginBottom: 24 }}>
-              Total Sessions: <strong>{adminSessions.length}</strong>
-            </p>
+            <div style={{ 
+              backgroundColor: "#f5f5f5", 
+              padding: "16px 20px", 
+              borderRadius: 12,
+              marginBottom: 24,
+              display: "flex",
+              alignItems: "center",
+              gap: 12
+            }}>
+              <span style={{ fontSize: 24 }}>📊</span>
+              <span style={{ color: "#666", fontSize: 16 }}>
+                Total Evaluations: <strong style={{ color: "#1a237e", fontSize: 18 }}>{adminSessions.length}</strong>
+              </span>
+            </div>
 
             <div style={{ overflowX: "auto" }}>
               <table style={{ 
@@ -1031,65 +1302,78 @@ function AppContent() {
                 fontSize: 14
               }}>
                 <thead>
-                  <tr style={{ backgroundColor: "#f5f5f5" }}>
-                    <th style={{ padding: 12, textAlign: "left", borderBottom: "2px solid #ddd" }}>Date</th>
-                    <th style={{ padding: 12, textAlign: "left", borderBottom: "2px solid #ddd" }}>Name</th>
-                    <th style={{ padding: 12, textAlign: "left", borderBottom: "2px solid #ddd" }}>Email</th>
-                    <th style={{ padding: 12, textAlign: "center", borderBottom: "2px solid #ddd" }}>Technical Conf.</th>
-                    <th style={{ padding: 12, textAlign: "center", borderBottom: "2px solid #ddd" }}>Consultative Conf.</th>
-                    <th style={{ padding: 12, textAlign: "center", borderBottom: "2px solid #ddd" }}>Overall Score</th>
+                  <tr style={{ backgroundColor: "#1a237e" }}>
+                    <th style={{ padding: "14px 12px", textAlign: "left", color: "white", fontWeight: 600, borderBottom: "3px solid #667eea" }}>Architect Name</th>
+                    <th style={{ padding: "14px 12px", textAlign: "left", color: "white", fontWeight: 600, borderBottom: "3px solid #667eea" }}>Email ID</th>
+                    <th style={{ padding: "14px 12px", textAlign: "center", color: "white", fontWeight: 600, borderBottom: "3px solid #667eea" }}>Evaluation Score</th>
+                    <th style={{ padding: "14px 12px", textAlign: "center", color: "white", fontWeight: 600, borderBottom: "3px solid #667eea" }}>Date & Time</th>
                   </tr>
                 </thead>
                 <tbody>
                   {adminSessions.length === 0 ? (
                     <tr>
-                      <td colSpan={6} style={{ padding: 24, textAlign: "center", color: "#999" }}>
-                        No sessions recorded yet
+                      <td colSpan={4} style={{ padding: 32, textAlign: "center", color: "#999", fontSize: 16 }}>
+                        📭 No evaluations recorded yet
                       </td>
                     </tr>
                   ) : (
                     adminSessions.map((session, idx) => (
-                      <tr key={idx} style={{ borderBottom: "1px solid #eee" }}>
-                        <td style={{ padding: 12 }}>
-                          {new Date(session.timestamp).toLocaleDateString()} {new Date(session.timestamp).toLocaleTimeString()}
+                      <tr 
+                        key={idx} 
+                        onClick={() => setSelectedSession(session)}
+                        style={{ 
+                          borderBottom: "1px solid #e0e0e0",
+                          backgroundColor: idx % 2 === 0 ? "#fafafa" : "white",
+                          cursor: "pointer",
+                          transition: "background-color 0.2s"
+                        }}
+                        onMouseEnter={e => {
+                          e.currentTarget.style.backgroundColor = "#e3f2fd";
+                        }}
+                        onMouseLeave={e => {
+                          e.currentTarget.style.backgroundColor = idx % 2 === 0 ? "#fafafa" : "white";
+                        }}
+                      >
+                        <td style={{ padding: "14px 12px", fontWeight: 600, color: "#1a237e" }}>
+                          {session.userName}
                         </td>
-                        <td style={{ padding: 12, fontWeight: 600 }}>{session.userName}</td>
-                        <td style={{ padding: 12 }}>{session.userEmail}</td>
-                        <td style={{ padding: 12, textAlign: "center" }}>
-                          <span style={{
-                            backgroundColor: session.technicalConfidence >= 7 ? "#4CAF50" : session.technicalConfidence >= 4 ? "#FF9800" : "#f44336",
-                            color: "white",
-                            padding: "4px 12px",
-                            borderRadius: 12,
-                            fontSize: 13,
-                            fontWeight: 600
-                          }}>
-                            {session.technicalConfidence}/10
-                          </span>
+                        <td style={{ padding: "14px 12px", color: "#555" }}>
+                          {session.userEmail}
                         </td>
-                        <td style={{ padding: 12, textAlign: "center" }}>
+                        <td style={{ padding: "14px 12px", textAlign: "center" }}>
                           <span style={{
-                            backgroundColor: session.consultativeConfidence >= 7 ? "#4CAF50" : session.consultativeConfidence >= 4 ? "#FF9800" : "#f44336",
+                            backgroundColor: session.overallScore >= 70 
+                              ? "#4CAF50" 
+                              : session.overallScore >= 50 
+                              ? "#FF9800" 
+                              : "#f44336",
                             color: "white",
-                            padding: "4px 12px",
-                            borderRadius: 12,
-                            fontSize: 13,
-                            fontWeight: 600
-                          }}>
-                            {session.consultativeConfidence}/10
-                          </span>
-                        </td>
-                        <td style={{ padding: 12, textAlign: "center" }}>
-                          <span style={{
-                            backgroundColor: session.overallScore >= 70 ? "#4CAF50" : session.overallScore >= 40 ? "#FF9800" : "#f44336",
-                            color: "white",
-                            padding: "4px 16px",
-                            borderRadius: 12,
-                            fontSize: 14,
-                            fontWeight: 700
+                            padding: "6px 20px",
+                            borderRadius: 20,
+                            fontSize: 16,
+                            fontWeight: 700,
+                            display: "inline-block",
+                            minWidth: 60
                           }}>
                             {session.overallScore}%
                           </span>
+                        </td>
+                        <td style={{ padding: "14px 12px", textAlign: "center", color: "#666" }}>
+                          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+                            <span style={{ fontWeight: 600, color: "#1a237e" }}>
+                              {new Date(session.timestamp).toLocaleDateString('en-US', { 
+                                month: 'short', 
+                                day: 'numeric', 
+                                year: 'numeric' 
+                              })}
+                            </span>
+                            <span style={{ fontSize: 12, color: "#999" }}>
+                              {new Date(session.timestamp).toLocaleTimeString('en-US', { 
+                                hour: '2-digit', 
+                                minute: '2-digit'
+                              })}
+                            </span>
+                          </div>
                         </td>
                       </tr>
                     ))

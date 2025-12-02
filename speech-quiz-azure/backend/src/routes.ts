@@ -8,6 +8,6 @@ import sessionsRoutes from "./routes/sessions";
 const router = Router();
 router.use("/speech", speechRoutes);
 router.use("/openai", openaiTtsRoutes);
-router.use("/api", sessionsRoutes);
+router.use("/", sessionsRoutes);
 router.use("/", quizRoutes);
 export default router;
