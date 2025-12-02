@@ -261,13 +261,20 @@ function AppContent() {
       setLoading(true);
       setError(null);
       
-      // Stop any ongoing listening/speaking
+      // Stop any ongoing listening/speaking and reset all related states
       if (listening) {
         onStopListening();
       }
       if (speaking || currentAudio) {
         stopSpeaking();
       }
+      
+      // Reset all listening/speaking states
+      setListening(false);
+      setContinuousListening(false);
+      setPausedListening(false);
+      setSpeaking(false);
+      setAudioPaused(false);
       
       const resp = await axios.get(`/api/nextquestion?idx=${i}`);
       setQuestion(resp.data.question);
@@ -760,8 +767,27 @@ function AppContent() {
             background: "white",
             borderRadius: 20,
             boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
-            padding: 40
+            padding: 40,
+            position: "relative"
           }}>
+            <button
+              onClick={() => navigateToPage('landing')}
+              style={{
+                position: "absolute",
+                top: 20,
+                right: 20,
+                padding: "8px 16px",
+                backgroundColor: "#667eea",
+                color: "white",
+                border: "none",
+                borderRadius: 8,
+                cursor: "pointer",
+                fontSize: 14,
+                fontWeight: 600
+              }}
+            >
+              🏠 Home
+            </button>
             <h2 style={{ 
               fontSize: 28, 
               fontWeight: 700, 
@@ -890,21 +916,38 @@ function AppContent() {
               }}>
                 Admin Dashboard
               </h1>
-              <button
-                onClick={() => navigateToPage('landing')}
-                style={{
-                  padding: "10px 20px",
-                  backgroundColor: "#f44336",
-                  color: "white",
-                  border: "none",
-                  borderRadius: 8,
-                  fontSize: 14,
-                  fontWeight: 600,
-                  cursor: "pointer"
-                }}
-              >
-                Logout
-              </button>
+              <div style={{ display: "flex", gap: 12 }}>
+                <button
+                  onClick={() => navigateToPage('landing')}
+                  style={{
+                    padding: "10px 20px",
+                    backgroundColor: "#667eea",
+                    color: "white",
+                    border: "none",
+                    borderRadius: 8,
+                    fontSize: 14,
+                    fontWeight: 600,
+                    cursor: "pointer"
+                  }}
+                >
+                  🏠 Home
+                </button>
+                <button
+                  onClick={() => navigateToPage('landing')}
+                  style={{
+                    padding: "10px 20px",
+                    backgroundColor: "#f44336",
+                    color: "white",
+                    border: "none",
+                    borderRadius: 8,
+                    fontSize: 14,
+                    fontWeight: 600,
+                    cursor: "pointer"
+                  }}
+                >
+                  Logout
+                </button>
+              </div>
             </div>
 
             <p style={{ color: "#666", marginBottom: 24 }}>
@@ -1013,8 +1056,30 @@ function AppContent() {
         <div style={{ 
           textAlign: "center", 
           color: "white", 
-          marginBottom: 20 
+          marginBottom: 20,
+          position: "relative"
         }}>
+          <button
+            onClick={() => navigateToPage('landing')}
+            style={{
+              position: "absolute",
+              left: 0,
+              top: 0,
+              padding: "10px 20px",
+              backgroundColor: "rgba(255,255,255,0.2)",
+              color: "white",
+              border: "2px solid white",
+              borderRadius: 8,
+              cursor: "pointer",
+              fontSize: 14,
+              fontWeight: 600,
+              transition: "all 0.3s"
+            }}
+            onMouseEnter={e => e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.3)"}
+            onMouseLeave={e => e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.2)"}
+          >
+            🏠 Home
+          </button>
           <h1 style={{ 
             fontSize: 32, 
             fontWeight: 700, 
@@ -1242,89 +1307,106 @@ function AppContent() {
               🎙️ Your Response
             </h3>
             <p style={{ color: "#666", marginBottom: 20, fontSize: 15 }}>
-              Click the microphone to start recording. Speak naturally and the app will transcribe your answer.
+              Click below to start responding. Speak naturally and your response will be transcribed.
             </p>
             
             <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap", justifyContent: "center" }}>
               <button
                 onClick={onStartListening}
                 disabled={loading || listening || (!azureReady && !browserFallbackReady)}
-                title="Start listening"
+                title="Start responding"
                 style={{
-                  width: 56,
-                  height: 56,
-                  backgroundColor: listening ? "#FF9800" : "#4CAF50",
+                  padding: "14px 32px",
+                  background: listening ? "linear-gradient(135deg, #FF9800 0%, #F57C00 100%)" : "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
                   color: "white",
                   border: "none",
-                  borderRadius: "50%",
+                  borderRadius: 12,
                   cursor: loading || listening || (!azureReady && !browserFallbackReady) ? "not-allowed" : "pointer",
-                  fontSize: 24,
+                  fontSize: 16,
+                  fontWeight: 600,
                   display: "flex",
                   alignItems: "center",
-                  justifyContent: "center",
-                  boxShadow: listening ? "0 0 0 8px rgba(255,152,0,0.3), 0 4px 12px rgba(0,0,0,0.2)" : "0 4px 12px rgba(0,0,0,0.15)",
-                  transition: "all 200ms",
+                  gap: 10,
+                  boxShadow: listening ? "0 0 0 4px rgba(255,152,0,0.2), 0 8px 16px rgba(0,0,0,0.2)" : "0 8px 16px rgba(102,126,234,0.3)",
+                  transition: "all 300ms ease",
                   opacity: loading || (!azureReady && !browserFallbackReady) ? 0.5 : 1
                 }}
                 onMouseEnter={e => {
                   if (!(loading || listening || (!azureReady && !browserFallbackReady))) {
-                    e.currentTarget.style.transform = "scale(1.1)";
+                    e.currentTarget.style.transform = "translateY(-2px)";
+                    e.currentTarget.style.boxShadow = "0 12px 24px rgba(102,126,234,0.4)";
                   }
                 }}
                 onMouseLeave={e => {
-                  e.currentTarget.style.transform = "scale(1)";
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "0 8px 16px rgba(102,126,234,0.3)";
                 }}
               >
-                🎤
+                <span style={{ fontSize: 20 }}>🎤</span>
+                <span>{listening ? "Recording..." : "Start Responding"}</span>
               </button>
               
               {listening && (
                 <>
                   <button
                     onClick={onStopListening}
-                    title="Stop listening"
+                    title="Stop recording"
                     style={{
-                      width: 56,
-                      height: 56,
-                      backgroundColor: "#f44336",
+                      padding: "14px 28px",
+                      background: "linear-gradient(135deg, #f44336 0%, #c62828 100%)",
                       color: "white",
                       border: "none",
-                      borderRadius: "50%",
+                      borderRadius: 12,
                       cursor: "pointer",
-                      fontSize: 24,
+                      fontSize: 16,
+                      fontWeight: 600,
                       display: "flex",
                       alignItems: "center",
-                      justifyContent: "center",
-                      boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-                      transition: "all 200ms"
+                      gap: 8,
+                      boxShadow: "0 8px 16px rgba(244,67,54,0.3)",
+                      transition: "all 300ms ease"
                     }}
-                    onMouseEnter={e => e.currentTarget.style.transform = "scale(1.1)"}
-                    onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.transform = "translateY(-2px)";
+                      e.currentTarget.style.boxShadow = "0 12px 24px rgba(244,67,54,0.4)";
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.transform = "translateY(0)";
+                      e.currentTarget.style.boxShadow = "0 8px 16px rgba(244,67,54,0.3)";
+                    }}
                   >
-                    ⏹
+                    <span style={{ fontSize: 18 }}>⏹</span>
+                    <span>Stop</span>
                   </button>
                   <button
                     onClick={togglePauseListening}
-                    title={pausedListening ? "Resume listening" : "Pause listening"}
+                    title={pausedListening ? "Resume recording" : "Pause recording"}
                     style={{
-                      width: 56,
-                      height: 56,
-                      backgroundColor: pausedListening ? "#3F51B5" : "#9E9E9E",
+                      padding: "14px 28px",
+                      background: pausedListening ? "linear-gradient(135deg, #3F51B5 0%, #283593 100%)" : "linear-gradient(135deg, #9E9E9E 0%, #616161 100%)",
                       color: "white",
                       border: "none",
-                      borderRadius: "50%",
+                      borderRadius: 12,
                       cursor: "pointer",
-                      fontSize: 24,
+                      fontSize: 16,
+                      fontWeight: 600,
                       display: "flex",
                       alignItems: "center",
-                      justifyContent: "center",
-                      boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-                      transition: "all 200ms"
+                      gap: 8,
+                      boxShadow: "0 8px 16px rgba(0,0,0,0.2)",
+                      transition: "all 300ms ease"
                     }}
-                    onMouseEnter={e => e.currentTarget.style.transform = "scale(1.1)"}
-                    onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.transform = "translateY(-2px)";
+                      e.currentTarget.style.boxShadow = "0 12px 24px rgba(0,0,0,0.3)";
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.transform = "translateY(0)";
+                      e.currentTarget.style.boxShadow = "0 8px 16px rgba(0,0,0,0.2)";
+                    }}
                   >
-                    {pausedListening ? "▶️" : "⏸"}
+                    <span style={{ fontSize: 18 }}>{pausedListening ? "▶️" : "⏸"}</span>
+                    <span>{pausedListening ? "Resume" : "Pause"}</span>
                   </button>
                 </>
               )}

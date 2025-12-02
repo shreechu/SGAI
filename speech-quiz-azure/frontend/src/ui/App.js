@@ -205,13 +205,19 @@ function AppContent() {
         try {
             setLoading(true);
             setError(null);
-            // Stop any ongoing listening/speaking
+            // Stop any ongoing listening/speaking and reset all related states
             if (listening) {
                 onStopListening();
             }
             if (speaking || currentAudio) {
                 stopSpeaking();
             }
+            // Reset all listening/speaking states
+            setListening(false);
+            setContinuousListening(false);
+            setPausedListening(false);
+            setSpeaking(false);
+            setAudioPaused(false);
             const resp = await axios.get(`/api/nextquestion?idx=${i}`);
             setQuestion(resp.data.question);
             setIdx(resp.data.nextIndex);
@@ -602,8 +608,21 @@ function AppContent() {
                         background: "white",
                         borderRadius: 20,
                         boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
-                        padding: 40
-                    }, children: [_jsx("h2", { style: {
+                        padding: 40,
+                        position: "relative"
+                    }, children: [_jsx("button", { onClick: () => navigateToPage('landing'), style: {
+                                position: "absolute",
+                                top: 20,
+                                right: 20,
+                                padding: "8px 16px",
+                                backgroundColor: "#667eea",
+                                color: "white",
+                                border: "none",
+                                borderRadius: 8,
+                                cursor: "pointer",
+                                fontSize: 14,
+                                fontWeight: 600
+                            }, children: "\uD83C\uDFE0 Home" }), _jsx("h2", { style: {
                                 fontSize: 28,
                                 fontWeight: 700,
                                 marginBottom: 24,
@@ -668,16 +687,25 @@ function AppContent() {
                                         fontWeight: 700,
                                         color: "#1a237e",
                                         margin: 0
-                                    }, children: "Admin Dashboard" }), _jsx("button", { onClick: () => navigateToPage('landing'), style: {
-                                        padding: "10px 20px",
-                                        backgroundColor: "#f44336",
-                                        color: "white",
-                                        border: "none",
-                                        borderRadius: 8,
-                                        fontSize: 14,
-                                        fontWeight: 600,
-                                        cursor: "pointer"
-                                    }, children: "Logout" })] }), _jsxs("p", { style: { color: "#666", marginBottom: 24 }, children: ["Total Sessions: ", _jsx("strong", { children: adminSessions.length })] }), _jsx("div", { style: { overflowX: "auto" }, children: _jsxs("table", { style: {
+                                    }, children: "Admin Dashboard" }), _jsxs("div", { style: { display: "flex", gap: 12 }, children: [_jsx("button", { onClick: () => navigateToPage('landing'), style: {
+                                                padding: "10px 20px",
+                                                backgroundColor: "#667eea",
+                                                color: "white",
+                                                border: "none",
+                                                borderRadius: 8,
+                                                fontSize: 14,
+                                                fontWeight: 600,
+                                                cursor: "pointer"
+                                            }, children: "\uD83C\uDFE0 Home" }), _jsx("button", { onClick: () => navigateToPage('landing'), style: {
+                                                padding: "10px 20px",
+                                                backgroundColor: "#f44336",
+                                                color: "white",
+                                                border: "none",
+                                                borderRadius: 8,
+                                                fontSize: 14,
+                                                fontWeight: 600,
+                                                cursor: "pointer"
+                                            }, children: "Logout" })] })] }), _jsxs("p", { style: { color: "#666", marginBottom: 24 }, children: ["Total Sessions: ", _jsx("strong", { children: adminSessions.length })] }), _jsx("div", { style: { overflowX: "auto" }, children: _jsxs("table", { style: {
                                     width: "100%",
                                     borderCollapse: "collapse",
                                     fontSize: 14
@@ -721,8 +749,22 @@ function AppContent() {
         }, children: [_jsxs("div", { style: { maxWidth: 1200, margin: "0 auto" }, children: [_jsxs("div", { style: {
                             textAlign: "center",
                             color: "white",
-                            marginBottom: 20
-                        }, children: [_jsx("h1", { style: {
+                            marginBottom: 20,
+                            position: "relative"
+                        }, children: [_jsx("button", { onClick: () => navigateToPage('landing'), style: {
+                                    position: "absolute",
+                                    left: 0,
+                                    top: 0,
+                                    padding: "10px 20px",
+                                    backgroundColor: "rgba(255,255,255,0.2)",
+                                    color: "white",
+                                    border: "2px solid white",
+                                    borderRadius: 8,
+                                    cursor: "pointer",
+                                    fontSize: 14,
+                                    fontWeight: 600,
+                                    transition: "all 0.3s"
+                                }, onMouseEnter: e => e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.3)", onMouseLeave: e => e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.2)", children: "\uD83C\uDFE0 Home" }), _jsx("h1", { style: {
                                     fontSize: 32,
                                     fontWeight: 700,
                                     marginBottom: 4,
@@ -851,56 +893,70 @@ function AppContent() {
                                             display: "flex",
                                             alignItems: "center",
                                             gap: 8
-                                        }, children: "\uD83C\uDF99\uFE0F Your Response" }), _jsx("p", { style: { color: "#666", marginBottom: 20, fontSize: 15 }, children: "Click the microphone to start recording. Speak naturally and the app will transcribe your answer." }), _jsxs("div", { style: { display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap", justifyContent: "center" }, children: [_jsx("button", { onClick: onStartListening, disabled: loading || listening || (!azureReady && !browserFallbackReady), title: "Start listening", style: {
-                                                    width: 56,
-                                                    height: 56,
-                                                    backgroundColor: listening ? "#FF9800" : "#4CAF50",
+                                        }, children: "\uD83C\uDF99\uFE0F Your Response" }), _jsx("p", { style: { color: "#666", marginBottom: 20, fontSize: 15 }, children: "Click below to start responding. Speak naturally and your response will be transcribed." }), _jsxs("div", { style: { display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap", justifyContent: "center" }, children: [_jsxs("button", { onClick: onStartListening, disabled: loading || listening || (!azureReady && !browserFallbackReady), title: "Start responding", style: {
+                                                    padding: "14px 32px",
+                                                    background: listening ? "linear-gradient(135deg, #FF9800 0%, #F57C00 100%)" : "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
                                                     color: "white",
                                                     border: "none",
-                                                    borderRadius: "50%",
+                                                    borderRadius: 12,
                                                     cursor: loading || listening || (!azureReady && !browserFallbackReady) ? "not-allowed" : "pointer",
-                                                    fontSize: 24,
+                                                    fontSize: 16,
+                                                    fontWeight: 600,
                                                     display: "flex",
                                                     alignItems: "center",
-                                                    justifyContent: "center",
-                                                    boxShadow: listening ? "0 0 0 8px rgba(255,152,0,0.3), 0 4px 12px rgba(0,0,0,0.2)" : "0 4px 12px rgba(0,0,0,0.15)",
-                                                    transition: "all 200ms",
+                                                    gap: 10,
+                                                    boxShadow: listening ? "0 0 0 4px rgba(255,152,0,0.2), 0 8px 16px rgba(0,0,0,0.2)" : "0 8px 16px rgba(102,126,234,0.3)",
+                                                    transition: "all 300ms ease",
                                                     opacity: loading || (!azureReady && !browserFallbackReady) ? 0.5 : 1
                                                 }, onMouseEnter: e => {
                                                     if (!(loading || listening || (!azureReady && !browserFallbackReady))) {
-                                                        e.currentTarget.style.transform = "scale(1.1)";
+                                                        e.currentTarget.style.transform = "translateY(-2px)";
+                                                        e.currentTarget.style.boxShadow = "0 12px 24px rgba(102,126,234,0.4)";
                                                     }
                                                 }, onMouseLeave: e => {
-                                                    e.currentTarget.style.transform = "scale(1)";
-                                                }, children: "\uD83C\uDFA4" }), listening && (_jsxs(_Fragment, { children: [_jsx("button", { onClick: onStopListening, title: "Stop listening", style: {
-                                                            width: 56,
-                                                            height: 56,
-                                                            backgroundColor: "#f44336",
+                                                    e.currentTarget.style.transform = "translateY(0)";
+                                                    e.currentTarget.style.boxShadow = "0 8px 16px rgba(102,126,234,0.3)";
+                                                }, children: [_jsx("span", { style: { fontSize: 20 }, children: "\uD83C\uDFA4" }), _jsx("span", { children: listening ? "Recording..." : "Start Responding" })] }), listening && (_jsxs(_Fragment, { children: [_jsxs("button", { onClick: onStopListening, title: "Stop recording", style: {
+                                                            padding: "14px 28px",
+                                                            background: "linear-gradient(135deg, #f44336 0%, #c62828 100%)",
                                                             color: "white",
                                                             border: "none",
-                                                            borderRadius: "50%",
+                                                            borderRadius: 12,
                                                             cursor: "pointer",
-                                                            fontSize: 24,
+                                                            fontSize: 16,
+                                                            fontWeight: 600,
                                                             display: "flex",
                                                             alignItems: "center",
-                                                            justifyContent: "center",
-                                                            boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-                                                            transition: "all 200ms"
-                                                        }, onMouseEnter: e => e.currentTarget.style.transform = "scale(1.1)", onMouseLeave: e => e.currentTarget.style.transform = "scale(1)", children: "\u23F9" }), _jsx("button", { onClick: togglePauseListening, title: pausedListening ? "Resume listening" : "Pause listening", style: {
-                                                            width: 56,
-                                                            height: 56,
-                                                            backgroundColor: pausedListening ? "#3F51B5" : "#9E9E9E",
+                                                            gap: 8,
+                                                            boxShadow: "0 8px 16px rgba(244,67,54,0.3)",
+                                                            transition: "all 300ms ease"
+                                                        }, onMouseEnter: e => {
+                                                            e.currentTarget.style.transform = "translateY(-2px)";
+                                                            e.currentTarget.style.boxShadow = "0 12px 24px rgba(244,67,54,0.4)";
+                                                        }, onMouseLeave: e => {
+                                                            e.currentTarget.style.transform = "translateY(0)";
+                                                            e.currentTarget.style.boxShadow = "0 8px 16px rgba(244,67,54,0.3)";
+                                                        }, children: [_jsx("span", { style: { fontSize: 18 }, children: "\u23F9" }), _jsx("span", { children: "Stop" })] }), _jsxs("button", { onClick: togglePauseListening, title: pausedListening ? "Resume recording" : "Pause recording", style: {
+                                                            padding: "14px 28px",
+                                                            background: pausedListening ? "linear-gradient(135deg, #3F51B5 0%, #283593 100%)" : "linear-gradient(135deg, #9E9E9E 0%, #616161 100%)",
                                                             color: "white",
                                                             border: "none",
-                                                            borderRadius: "50%",
+                                                            borderRadius: 12,
                                                             cursor: "pointer",
-                                                            fontSize: 24,
+                                                            fontSize: 16,
+                                                            fontWeight: 600,
                                                             display: "flex",
                                                             alignItems: "center",
-                                                            justifyContent: "center",
-                                                            boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-                                                            transition: "all 200ms"
-                                                        }, onMouseEnter: e => e.currentTarget.style.transform = "scale(1.1)", onMouseLeave: e => e.currentTarget.style.transform = "scale(1)", children: pausedListening ? "▶️" : "⏸" })] }))] }), _jsx("div", { style: { textAlign: "center", color: "#999", fontSize: 13, marginBottom: 16 }, children: azureReady ? "✓ Azure Speech SDK" : browserFallbackReady ? "✓ Browser Speech" : "Speech not available" }), transcript && (_jsxs("div", { style: {
+                                                            gap: 8,
+                                                            boxShadow: "0 8px 16px rgba(0,0,0,0.2)",
+                                                            transition: "all 300ms ease"
+                                                        }, onMouseEnter: e => {
+                                                            e.currentTarget.style.transform = "translateY(-2px)";
+                                                            e.currentTarget.style.boxShadow = "0 12px 24px rgba(0,0,0,0.3)";
+                                                        }, onMouseLeave: e => {
+                                                            e.currentTarget.style.transform = "translateY(0)";
+                                                            e.currentTarget.style.boxShadow = "0 8px 16px rgba(0,0,0,0.2)";
+                                                        }, children: [_jsx("span", { style: { fontSize: 18 }, children: pausedListening ? "▶️" : "⏸" }), _jsx("span", { children: pausedListening ? "Resume" : "Pause" })] })] }))] }), _jsx("div", { style: { textAlign: "center", color: "#999", fontSize: 13, marginBottom: 16 }, children: azureReady ? "✓ Azure Speech SDK" : browserFallbackReady ? "✓ Browser Speech" : "Speech not available" }), transcript && (_jsxs("div", { style: {
                                             marginTop: 16,
                                             padding: 16,
                                             backgroundColor: "#f8f9fa",
