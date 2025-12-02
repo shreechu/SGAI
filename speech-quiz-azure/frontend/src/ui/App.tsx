@@ -101,12 +101,8 @@ function AppContent() {
   const webVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
   const tokenRef = useRef<{ token: string; region: string } | null>(null);
 
+  // Initialize browser speech API on mount
   useEffect(() => {
-    if (currentPage === 'quiz') {
-      fetchToken();
-      fetchQuestion(0);
-    }
-    // Detect browser Web Speech API availability as a fallback
     try {
       const w = window as any;
       if (w && (w.SpeechRecognition || w.webkitSpeechRecognition)) {
@@ -125,6 +121,14 @@ function AppContent() {
       }
     } catch {}
   }, []);
+
+  // Load quiz when page becomes 'quiz'
+  useEffect(() => {
+    if (currentPage === 'quiz') {
+      fetchToken();
+      fetchQuestion(0);
+    }
+  }, [currentPage]);
 
   // Rebuild Azure synthesizer when voice or style changes
   useEffect(() => {
@@ -1492,116 +1496,6 @@ function AppContent() {
             </div>
           </div>
           )}
-
-      {/* End Evaluation Confirmation Modal */}
-      {showEndConfirmation && (
-        <div style={{
-          position: "fixed",
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: "rgba(0,0,0,0.6)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          zIndex: 1000
-        }}>
-          <div style={{
-            background: "white",
-            borderRadius: 16,
-            padding: 32,
-            maxWidth: 500,
-            width: "90%",
-            boxShadow: "0 20px 60px rgba(0,0,0,0.3)"
-          }}>
-            <h2 style={{ marginTop: 0, marginBottom: 16, color: "#1a237e" }}>End Evaluation?</h2>
-            
-            {(() => {
-              const unansweredTopics = seenQuestions.filter(q => !answers[q.id]);
-              const totalQuestions = 12;
-              const answeredCount = Object.keys(answers).length;
-              const unseenCount = totalQuestions - seenQuestions.length;
-              
-              return (
-                <>
-                  <p style={{ marginBottom: 16, color: "#37474f" }}>
-                    You have answered <strong>{answeredCount}</strong> out of <strong>{seenQuestions.length}</strong> questions seen.
-                  </p>
-                  
-                  {unseenCount > 0 && (
-                    <div style={{ 
-                      padding: 12, 
-                      background: "#fff3e0", 
-                      border: "2px solid #ff9800", 
-                      borderRadius: 8,
-                      marginBottom: 16 
-                    }}>
-                      <strong style={{ color: "#e65100" }}>⚠️ {unseenCount} questions not yet viewed</strong>
-                    </div>
-                  )}
-                  
-                  {unansweredTopics.length > 0 && (
-                    <div style={{ 
-                      padding: 12, 
-                      background: "#ffebee", 
-                      border: "1px solid #ef5350", 
-                      borderRadius: 8,
-                      marginBottom: 16 
-                    }}>
-                      <strong style={{ color: "#c62828" }}>Topics not covered ({unansweredTopics.length}):</strong>
-                      <ul style={{ margin: "8px 0 0 20px", paddingLeft: 0 }}>
-                        {unansweredTopics.map(q => (
-                          <li key={q.id} style={{ marginBottom: 4, color: "#d32f2f" }}>
-                            {q.topic || q.heading || q.id}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  
-                  <p style={{ marginBottom: 24, color: "#37474f" }}>
-                    Are you sure you want to end the evaluation and see your results?
-                  </p>
-                  
-                  <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
-                    <button
-                      onClick={() => setShowEndConfirmation(false)}
-                      style={{
-                        padding: "12px 24px",
-                        backgroundColor: "#9E9E9E",
-                        color: "white",
-                        border: "none",
-                        borderRadius: 8,
-                        cursor: "pointer",
-                        fontSize: 14,
-                        fontWeight: 600
-                      }}
-                    >
-                      No, Continue
-                    </button>
-                    <button
-                      onClick={confirmEndEvaluation}
-                      style={{
-                        padding: "12px 24px",
-                        backgroundColor: "#4CAF50",
-                        color: "white",
-                        border: "none",
-                        borderRadius: 8,
-                        cursor: "pointer",
-                        fontSize: 14,
-                        fontWeight: 600
-                      }}
-                    >
-                      Yes, End & Show Results
-                    </button>
-                  </div>
-                </>
-              );
-            })()}
-          </div>
-        </div>
-      )}
 
       {/* End Evaluation Confirmation Modal */}
       {showEndConfirmation && (
