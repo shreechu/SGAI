@@ -40,10 +40,8 @@ export default function App() {
   const [browserVoices, setBrowserVoices] = useState<SpeechSynthesisVoice[]>([]);
 
   const recognizerRef = useRef<SpeechSDK.SpeechRecognizer | null>(null);
-  const synthesizerRef = useRef<SpeechSDK.SpeechSynthesizer | null>(null);
   const webVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
   const tokenRef = useRef<{ token: string; region: string } | null>(null);
-  const DEFAULT_AZURE_VOICE = "en-US-AriaNeural";
 
   useEffect(() => {
     fetchToken();
@@ -78,7 +76,6 @@ export default function App() {
         tokenRef.current.region
       );
       speechConfig.speechRecognitionLanguage = "en-US";
-      try { synthesizerRef.current?.close?.(); } catch {}
       const audioConfig = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
       recognizerRef.current = new SpeechSDK.SpeechRecognizer(speechConfig, audioConfig);
     } catch {}
@@ -99,12 +96,8 @@ export default function App() {
     try {
       const speechConfig = SpeechSDK.SpeechConfig.fromAuthorizationToken(tokenInfo.token, tokenInfo.region);
       speechConfig.speechRecognitionLanguage = "en-US";
-      // Set the most realistic neural voice for TTS
-      try { speechConfig.speechSynthesisVoiceName = AZURE_VOICE; } catch {}
-
       const audioConfig = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
       recognizerRef.current = new SpeechSDK.SpeechRecognizer(speechConfig, audioConfig);
-      synthesizerRef.current = new SpeechSDK.SpeechSynthesizer(speechConfig);
       setAzureReady(true);
     } catch (err) {
       console.error("Failed to initialize speech objects:", err);
@@ -112,94 +105,70 @@ export default function App() {
     }
   }
 
-  function buildAzureSsml(text: string, voiceName: string) {
-    const safe = (text || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    
-    return `<?xml version="1.0" encoding="UTF-8"?>
-<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="en-US">
-  <voice name="${voiceName}">
-    <mstts:express-as style="${VOICE_STYLE}" styledegree="2">
-      <prosody rate="0.95" pitch="+0%" volume="+5%">
-        ${safe}
-      </prosody>
-    </mstts:express-as>
-  </voice>
-</speak>`;
-  }
-
-  // Speak helper that uses Azure when available, else browser speech
-  function speakText(text: string) {
+  // Speak helper using OpenAI GPT-4 Audio for ultra-realistic voice
+  async function speakText(text: string) {
     if (!text) return;
+    
+    // Stop any currently playing audio
+    if (currentAudio) {
+      currentAudio.pause();
+      currentAudio.currentTime = 0;
+    }
+    
     setSpeaking(true);
-    // Azure path
-    if (synthesizerRef.current) {
-      try {
-        const ssml = buildAzureSsml(text, AZURE_VOICE);
-        (synthesizerRef.current as any).speakSsmlAsync(
-          ssml,
-          () => setSpeaking(false),
-          (err: any) => { console.error(err); setSpeaking(false); }
-        );
-        return;
-      } catch (e) {
-        console.warn("Azure TTS failed, using browser fallback", e);
-      }
+    
+    try {
+      // Call OpenAI TTS endpoint
+      const response = await axios.post("/api/openai/tts", 
+        { text },
+        { responseType: "blob" }
+      );
+      
+      // Create audio element from blob
+      const audioBlob = new Blob([response.data], { type: "audio/mpeg" });
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+      
+      audio.onended = () => {
+        setSpeaking(false);
+        URL.revokeObjectURL(audioUrl);
+      };
+      
+      audio.onerror = (err) => {
+        console.error("Audio playback error:", err);
+        setSpeaking(false);
+        URL.revokeObjectURL(audioUrl);
+      };
+      
+      setCurrentAudio(audio);
+      await audio.play();
+    } catch (err) {
+      console.error("OpenAI TTS failed:", err);
+      setSpeaking(false);
+      setError("Failed to generate speech. Please check OpenAI configuration.");
     }
-    // Browser fallback
-    if (typeof window !== "undefined" && window.speechSynthesis) {
-      const u = new SpeechSynthesisUtterance(text);
-      if (webVoiceRef.current) u.voice = webVoiceRef.current;
-      u.rate = 1.05; // slightly more natural pacing
-      u.pitch = 1.0;
-      u.onend = () => setSpeaking(false);
-      u.onerror = () => setSpeaking(false);
-      window.speechSynthesis.speak(u);
-      return;
-    }
-    setSpeaking(false);
-    setError("No TTS available. Configure Azure Speech or use a browser with speechSynthesis support.");
   }
 
   function pauseOrResumeSpeaking() {
+    if (!currentAudio) return;
+    
     try {
-      if (typeof window !== "undefined" && window.speechSynthesis) {
-        if (window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
-          window.speechSynthesis.pause();
-        } else if (window.speechSynthesis.paused) {
-          window.speechSynthesis.resume();
-        }
+      if (currentAudio.paused) {
+        currentAudio.play();
+      } else {
+        currentAudio.pause();
       }
-      // Note: Azure Speech SDK doesn't have built-in pause/resume for TTS
-      // For Azure, we'd need to implement chunking or use stop/restart
     } catch (err) {
       console.error("Pause/resume failed:", err);
     }
   }
 
   function stopSpeaking() {
-    try {
-      // Browser speech: cancel queue
-      if (typeof window !== "undefined" && window.speechSynthesis) {
-        try { window.speechSynthesis.cancel(); } catch {}
-      }
-      // Azure speech: try stopSpeakingAsync if available, else recreate synthesizer
-      const synth: any = synthesizerRef.current as any;
-      if (synth && typeof synth.stopSpeakingAsync === "function") {
-        try { synth.stopSpeakingAsync(() => {}, () => {}); } catch {}
-      } else if (synth && typeof synth.close === "function") {
-        try { synth.close(); } catch {}
-        // Recreate synthesizer so future TTS still works
-        try {
-          if (tokenRef.current) {
-            const cfg = SpeechSDK.SpeechConfig.fromAuthorizationToken(tokenRef.current.token, tokenRef.current.region);
-            try { cfg.speechSynthesisVoiceName = AZURE_VOICE; } catch {}
-            synthesizerRef.current = new SpeechSDK.SpeechSynthesizer(cfg);
-          }
-        } catch {}
-      }
-    } finally {
-      setSpeaking(false);
+    if (currentAudio) {
+      currentAudio.pause();
+      currentAudio.currentTime = 0;
     }
+    setSpeaking(false);
   }
 
   async function fetchQuestion(i: number) {
