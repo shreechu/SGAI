@@ -13,12 +13,35 @@ export default function App() {
     const [error, setError] = useState(null);
     const [listening, setListening] = useState(false);
     const [speaking, setSpeaking] = useState(false);
+    const [azureReady, setAzureReady] = useState(false);
+    const [browserFallbackReady, setBrowserFallbackReady] = useState(false);
     const recognizerRef = useRef(null);
     const synthesizerRef = useRef(null);
+    const webVoiceRef = useRef(null);
     const tokenRef = useRef(null);
+    const DEFAULT_AZURE_VOICE = "en-US-AriaNeural";
     useEffect(() => {
         fetchToken();
         fetchQuestion(0);
+        // Detect browser Web Speech API availability as a fallback
+        try {
+            const w = window;
+            if (w && (w.SpeechRecognition || w.webkitSpeechRecognition)) {
+                setBrowserFallbackReady(true);
+            }
+            if (typeof window !== "undefined" && window.speechSynthesis) {
+                const assignVoice = () => {
+                    const voices = window.speechSynthesis.getVoices();
+                    if (voices && voices.length) {
+                        webVoiceRef.current =
+                            voices.find(v => v.lang?.toLowerCase().startsWith("en")) || voices[0] || null;
+                    }
+                };
+                window.speechSynthesis.onvoiceschanged = assignVoice;
+                assignVoice();
+            }
+        }
+        catch { }
     }, []);
     async function fetchToken() {
         try {
@@ -27,20 +50,56 @@ export default function App() {
             initializeSpeechObjects(resp.data);
         }
         catch (err) {
-            console.warn("Speech token not available (Speech services may not be configured):", err.message);
+            console.warn("Speech token not available (Speech services may not be configured):", err?.message || err);
+            setAzureReady(false);
         }
     }
     function initializeSpeechObjects(tokenInfo) {
         try {
             const speechConfig = SpeechSDK.SpeechConfig.fromAuthorizationToken(tokenInfo.token, tokenInfo.region);
             speechConfig.speechRecognitionLanguage = "en-US";
+            // Set a pleasant neural voice for TTS
+            try {
+                speechConfig.speechSynthesisVoiceName = DEFAULT_AZURE_VOICE;
+            }
+            catch { }
             const audioConfig = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
             recognizerRef.current = new SpeechSDK.SpeechRecognizer(speechConfig, audioConfig);
             synthesizerRef.current = new SpeechSDK.SpeechSynthesizer(speechConfig);
+            setAzureReady(true);
         }
         catch (err) {
             console.error("Failed to initialize speech objects:", err);
+            setAzureReady(false);
         }
+    }
+    // Speak helper that uses Azure when available, else browser speech
+    function speakText(text) {
+        if (!text)
+            return;
+        setSpeaking(true);
+        // Azure path
+        if (synthesizerRef.current) {
+            try {
+                synthesizerRef.current.speakTextAsync(text, () => setSpeaking(false), (err) => { console.error(err); setSpeaking(false); });
+                return;
+            }
+            catch (e) {
+                console.warn("Azure TTS failed, using browser fallback", e);
+            }
+        }
+        // Browser fallback
+        if (typeof window !== "undefined" && window.speechSynthesis) {
+            const u = new SpeechSynthesisUtterance(text);
+            if (webVoiceRef.current)
+                u.voice = webVoiceRef.current;
+            u.onend = () => setSpeaking(false);
+            u.onerror = () => setSpeaking(false);
+            window.speechSynthesis.speak(u);
+            return;
+        }
+        setSpeaking(false);
+        setError("No TTS available. Configure Azure Speech or use a browser with speechSynthesis support.");
     }
     async function fetchQuestion(i) {
         try {
@@ -51,6 +110,10 @@ export default function App() {
             setIdx(resp.data.nextIndex);
             setTranscript("");
             setEvaluation(null);
+            // Auto-speak the question content
+            if (resp.data?.question?.question) {
+                speakText(resp.data.question.question);
+            }
         }
         catch (err) {
             setError(`Failed to load question: ${err.message}`);
@@ -61,44 +124,62 @@ export default function App() {
         }
     }
     function onPlayQuestion() {
-        if (!question || !synthesizerRef.current) {
-            setError("Question not loaded or speech not configured");
+        if (!question)
             return;
-        }
         try {
-            setSpeaking(true);
-            synthesizerRef.current.speakTextAsync(question.question, () => setSpeaking(false), (err) => {
-                setError(`TTS error: ${err}`);
-                setSpeaking(false);
-            });
+            speakText(question.question);
         }
         catch (err) {
             setError(`Failed to play question: ${err.message}`);
-            setSpeaking(false);
         }
     }
     function onStartListening() {
-        if (!recognizerRef.current) {
-            setError("Speech recognizer not initialized. Please configure Azure Speech services.");
-            return;
-        }
         try {
             setListening(true);
             setTranscript("");
             setError(null);
-            recognizerRef.current.recognizeOnceAsync((result) => {
-                if (result.reason === SpeechSDK.ResultReason.RecognizedSpeech) {
-                    setTranscript(result.text);
-                }
-                else if (result.reason === SpeechSDK.ResultReason.NoMatch) {
-                    setError("No speech detected. Please try again.");
-                }
-                else if (result.reason === SpeechSDK.ResultReason.Canceled) {
-                    const cancellation = SpeechSDK.CancellationDetails.fromResult(result);
-                    setError(`Recognition error: ${cancellation.errorDetails}`);
-                }
-                setListening(false);
-            });
+            if (azureReady && recognizerRef.current) {
+                // Azure Speech recognition (single utterance)
+                recognizerRef.current.recognizeOnceAsync((result) => {
+                    if (result.reason === SpeechSDK.ResultReason.RecognizedSpeech) {
+                        setTranscript(result.text);
+                    }
+                    else if (result.reason === SpeechSDK.ResultReason.NoMatch) {
+                        setError("No speech detected. Please try again.");
+                    }
+                    else if (result.reason === SpeechSDK.ResultReason.Canceled) {
+                        const cancellation = SpeechSDK.CancellationDetails.fromResult(result);
+                        setError(`Recognition error: ${cancellation.errorDetails}`);
+                    }
+                    setListening(false);
+                });
+                return;
+            }
+            // Browser Web Speech API fallback
+            const w = window;
+            const SR = w.SpeechRecognition || w.webkitSpeechRecognition;
+            if (SR) {
+                const rec = new SR();
+                rec.lang = "en-US";
+                rec.continuous = false;
+                rec.interimResults = false;
+                rec.onresult = (e) => {
+                    try {
+                        const text = e.results?.[0]?.[0]?.transcript || "";
+                        setTranscript(text);
+                    }
+                    catch { }
+                };
+                rec.onerror = (e) => {
+                    console.error(e);
+                    setError(`Recognition error: ${e?.error || "unknown"}`);
+                };
+                rec.onend = () => setListening(false);
+                rec.start();
+                return;
+            }
+            setError("No speech recognition available. Configure Azure Speech or use Chrome/Edge (Web Speech API).");
+            setListening(false);
         }
         catch (err) {
             setError(`Failed to start listening: ${err.message}`);
@@ -154,7 +235,11 @@ export default function App() {
                     borderRadius: 8,
                     backgroundColor: "#f9f9f9",
                     marginBottom: 16
-                }, children: [_jsx("h3", { children: "\uD83D\uDCDD Question" }), _jsx("p", { style: { fontSize: 18, lineHeight: 1.6, marginBottom: 12 }, children: question?.question || "Loading..." }), _jsx("button", { onClick: onPlayQuestion, disabled: !question || listening || speaking, style: {
+                }, children: [_jsx("h3", { style: { display: "flex", alignItems: "center", gap: 12 }, children: "\uD83D\uDCDD Question" }), _jsxs("div", { style: { display: "flex", gap: 16, alignItems: "flex-start" }, children: [_jsx("img", { src: "/bot.svg", alt: "Quiz Bot", width: 72, height: 72, style: {
+                                    borderRadius: "50%",
+                                    boxShadow: speaking ? "0 0 0 4px rgba(76,175,80,0.25)" : "none",
+                                    transition: "box-shadow 200ms ease-in-out"
+                                } }), _jsx("p", { style: { fontSize: 18, lineHeight: 1.6, marginBottom: 12 }, children: question?.question || "Loading..." })] }), _jsx("button", { onClick: onPlayQuestion, disabled: !question || listening || speaking, style: {
                             padding: "8px 16px",
                             backgroundColor: "#2196F3",
                             color: "white",
@@ -173,16 +258,16 @@ export default function App() {
                     borderRadius: 8,
                     backgroundColor: "#f1f8f4",
                     marginBottom: 16
-                }, children: [_jsx("h3", { children: "\uD83C\uDF99\uFE0F Record Your Answer" }), _jsx("p", { style: { color: "#666", marginBottom: 12 }, children: "Click \"Start Listening\" and speak your answer. The app will record and transcribe it." }), _jsx("button", { onClick: onStartListening, disabled: loading || listening || !recognizerRef.current, style: {
+                }, children: [_jsx("h3", { children: "\uD83C\uDF99\uFE0F Record Your Answer" }), _jsx("p", { style: { color: "#666", marginBottom: 12 }, children: "Click \"Start Listening\" and speak your answer. The app will record and transcribe it." }), _jsx("button", { onClick: onStartListening, disabled: loading || listening || (!azureReady && !browserFallbackReady), style: {
                             padding: "12px 24px",
                             backgroundColor: listening ? "#FF9800" : "#4CAF50",
                             color: "white",
                             border: "none",
                             borderRadius: 4,
-                            cursor: loading || listening || !recognizerRef.current ? "not-allowed" : "pointer",
+                            cursor: loading || listening || (!azureReady && !browserFallbackReady) ? "not-allowed" : "pointer",
                             fontSize: 16,
                             fontWeight: "bold"
-                        }, children: listening ? "🎤 Listening..." : "🎤 Start Listening" }), transcript && (_jsxs("div", { style: {
+                        }, children: listening ? "🎤 Listening..." : "🎤 Start Listening" }), _jsx("div", { style: { marginTop: 8, color: "#666", fontSize: 13 }, children: azureReady ? "Using Azure Speech SDK" : browserFallbackReady ? "Using browser speech fallback" : "Speech not available" }), transcript && (_jsxs("div", { style: {
                             marginTop: 12,
                             padding: 12,
                             backgroundColor: "white",
