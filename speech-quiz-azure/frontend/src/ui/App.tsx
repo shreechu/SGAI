@@ -31,11 +31,12 @@ export default function App() {
   const [listening, setListening] = useState(false);
   const [continuousListening, setContinuousListening] = useState(false);
   const [speaking, setSpeaking] = useState(false);
+  const [audioPaused, setAudioPaused] = useState(false);
   const [pausedListening, setPausedListening] = useState(false);
   const [azureReady, setAzureReady] = useState(false);
   const [browserFallbackReady, setBrowserFallbackReady] = useState(false);
   const [autoRead, setAutoRead] = useState(true);
-  // Using OpenAI GPT Audio for most realistic voice
+  // Using Azure Neural TTS for most realistic voice
   const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null);
   const [browserVoices, setBrowserVoices] = useState<SpeechSynthesisVoice[]>([]);
 
@@ -105,7 +106,7 @@ export default function App() {
     }
   }
 
-  // Speak helper using OpenAI GPT-4 Audio for ultra-realistic voice
+  // Speak helper using Azure Neural TTS for ultra-realistic voice
   async function speakText(text: string) {
     if (!text) return;
     
@@ -113,12 +114,14 @@ export default function App() {
     if (currentAudio) {
       currentAudio.pause();
       currentAudio.currentTime = 0;
+      setCurrentAudio(null);
     }
     
     setSpeaking(true);
+    setAudioPaused(false);
     
     try {
-      // Call OpenAI TTS endpoint
+      // Call Azure Neural TTS endpoint
       const response = await axios.post("/api/openai/tts", 
         { text },
         { responseType: "blob" }
@@ -129,23 +132,38 @@ export default function App() {
       const audioUrl = URL.createObjectURL(audioBlob);
       const audio = new Audio(audioUrl);
       
+      audio.onplay = () => {
+        setSpeaking(true);
+        setAudioPaused(false);
+      };
+      
+      audio.onpause = () => {
+        setAudioPaused(true);
+      };
+      
       audio.onended = () => {
         setSpeaking(false);
+        setAudioPaused(false);
+        setCurrentAudio(null);
         URL.revokeObjectURL(audioUrl);
       };
       
       audio.onerror = (err) => {
         console.error("Audio playback error:", err);
         setSpeaking(false);
+        setAudioPaused(false);
+        setCurrentAudio(null);
         URL.revokeObjectURL(audioUrl);
       };
       
       setCurrentAudio(audio);
       await audio.play();
     } catch (err) {
-      console.error("OpenAI TTS failed:", err);
+      console.error("Azure Neural TTS failed:", err);
       setSpeaking(false);
-      setError("Failed to generate speech. Please check OpenAI configuration.");
+      setAudioPaused(false);
+      setCurrentAudio(null);
+      setError("Failed to generate speech. Please check Azure Speech configuration.");
     }
   }
 
@@ -155,8 +173,10 @@ export default function App() {
     try {
       if (currentAudio.paused) {
         currentAudio.play();
+        setAudioPaused(false);
       } else {
         currentAudio.pause();
+        setAudioPaused(true);
       }
     } catch (err) {
       console.error("Pause/resume failed:", err);
@@ -167,8 +187,10 @@ export default function App() {
     if (currentAudio) {
       currentAudio.pause();
       currentAudio.currentTime = 0;
+      setCurrentAudio(null);
     }
     setSpeaking(false);
+    setAudioPaused(false);
   }
 
   async function fetchQuestion(i: number) {
@@ -540,7 +562,7 @@ export default function App() {
               <button
                 onClick={speaking ? pauseOrResumeSpeaking : onPlayQuestion}
                 disabled={!question || listening}
-                title={speaking ? (currentAudio?.paused ? "Resume" : "Pause") : "Play message"}
+                title={speaking ? (audioPaused ? "Resume" : "Pause") : "Play message"}
                 style={{
                   width: 48,
                   height: 48,
@@ -566,7 +588,7 @@ export default function App() {
                   e.currentTarget.style.transform = "scale(1)";
                 }}
               >
-                {speaking && currentAudio?.paused ? "▶️" : speaking ? "⏸" : "▶️"}
+                {audioPaused ? "▶️" : speaking ? "⏸" : "▶️"}
               </button>
               {speaking && (
                 <button

@@ -17,11 +17,12 @@ export default function App() {
     const [listening, setListening] = useState(false);
     const [continuousListening, setContinuousListening] = useState(false);
     const [speaking, setSpeaking] = useState(false);
+    const [audioPaused, setAudioPaused] = useState(false);
     const [pausedListening, setPausedListening] = useState(false);
     const [azureReady, setAzureReady] = useState(false);
     const [browserFallbackReady, setBrowserFallbackReady] = useState(false);
     const [autoRead, setAutoRead] = useState(true);
-    // Using OpenAI GPT Audio for most realistic voice
+    // Using Azure Neural TTS for most realistic voice
     const [currentAudio, setCurrentAudio] = useState(null);
     const [browserVoices, setBrowserVoices] = useState([]);
     const recognizerRef = useRef(null);
@@ -86,7 +87,7 @@ export default function App() {
             setAzureReady(false);
         }
     }
-    // Speak helper using OpenAI GPT-4 Audio for ultra-realistic voice
+    // Speak helper using Azure Neural TTS for ultra-realistic voice
     async function speakText(text) {
         if (!text)
             return;
@@ -94,31 +95,46 @@ export default function App() {
         if (currentAudio) {
             currentAudio.pause();
             currentAudio.currentTime = 0;
+            setCurrentAudio(null);
         }
         setSpeaking(true);
+        setAudioPaused(false);
         try {
-            // Call OpenAI TTS endpoint
+            // Call Azure Neural TTS endpoint
             const response = await axios.post("/api/openai/tts", { text }, { responseType: "blob" });
             // Create audio element from blob
             const audioBlob = new Blob([response.data], { type: "audio/mpeg" });
             const audioUrl = URL.createObjectURL(audioBlob);
             const audio = new Audio(audioUrl);
+            audio.onplay = () => {
+                setSpeaking(true);
+                setAudioPaused(false);
+            };
+            audio.onpause = () => {
+                setAudioPaused(true);
+            };
             audio.onended = () => {
                 setSpeaking(false);
+                setAudioPaused(false);
+                setCurrentAudio(null);
                 URL.revokeObjectURL(audioUrl);
             };
             audio.onerror = (err) => {
                 console.error("Audio playback error:", err);
                 setSpeaking(false);
+                setAudioPaused(false);
+                setCurrentAudio(null);
                 URL.revokeObjectURL(audioUrl);
             };
             setCurrentAudio(audio);
             await audio.play();
         }
         catch (err) {
-            console.error("OpenAI TTS failed:", err);
+            console.error("Azure Neural TTS failed:", err);
             setSpeaking(false);
-            setError("Failed to generate speech. Please check OpenAI configuration.");
+            setAudioPaused(false);
+            setCurrentAudio(null);
+            setError("Failed to generate speech. Please check Azure Speech configuration.");
         }
     }
     function pauseOrResumeSpeaking() {
@@ -127,9 +143,11 @@ export default function App() {
         try {
             if (currentAudio.paused) {
                 currentAudio.play();
+                setAudioPaused(false);
             }
             else {
                 currentAudio.pause();
+                setAudioPaused(true);
             }
         }
         catch (err) {
@@ -140,8 +158,10 @@ export default function App() {
         if (currentAudio) {
             currentAudio.pause();
             currentAudio.currentTime = 0;
+            setCurrentAudio(null);
         }
         setSpeaking(false);
+        setAudioPaused(false);
     }
     async function fetchQuestion(i) {
         try {
@@ -455,7 +475,7 @@ export default function App() {
                                             textAlign: "center",
                                             maxWidth: 800,
                                             marginBottom: 20
-                                        }, children: question?.question || "Loading question..." }), _jsxs("div", { style: { display: "flex", gap: 12, marginTop: 8 }, children: [_jsx("button", { onClick: speaking ? pauseOrResumeSpeaking : onPlayQuestion, disabled: !question || listening, title: speaking ? (currentAudio?.paused ? "Resume" : "Pause") : "Play message", style: {
+                                        }, children: question?.question || "Loading question..." }), _jsxs("div", { style: { display: "flex", gap: 12, marginTop: 8 }, children: [_jsx("button", { onClick: speaking ? pauseOrResumeSpeaking : onPlayQuestion, disabled: !question || listening, title: speaking ? (audioPaused ? "Resume" : "Pause") : "Play message", style: {
                                                     width: 48,
                                                     height: 48,
                                                     backgroundColor: speaking ? "#FF9800" : "#2196F3",
@@ -476,7 +496,7 @@ export default function App() {
                                                     }
                                                 }, onMouseLeave: e => {
                                                     e.currentTarget.style.transform = "scale(1)";
-                                                }, children: speaking && currentAudio?.paused ? "▶️" : speaking ? "⏸" : "▶️" }), speaking && (_jsx("button", { onClick: stopSpeaking, title: "Stop speaking", style: {
+                                                }, children: audioPaused ? "▶️" : speaking ? "⏸" : "▶️" }), speaking && (_jsx("button", { onClick: stopSpeaking, title: "Stop speaking", style: {
                                                     width: 48,
                                                     height: 48,
                                                     backgroundColor: "#f44336",
