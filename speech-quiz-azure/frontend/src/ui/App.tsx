@@ -35,9 +35,8 @@ export default function App() {
   const [azureReady, setAzureReady] = useState(false);
   const [browserFallbackReady, setBrowserFallbackReady] = useState(false);
   const [autoRead, setAutoRead] = useState(true);
-  // Using the most realistic, human-like voice available
-  const AZURE_VOICE = "en-US-AndrewMultilingualNeural";
-  const VOICE_STYLE = "friendly";
+  // Using OpenAI GPT Audio for most realistic voice
+  const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null);
   const [browserVoices, setBrowserVoices] = useState<SpeechSynthesisVoice[]>([]);
 
   const recognizerRef = useRef<SpeechSDK.SpeechRecognizer | null>(null);
@@ -79,9 +78,9 @@ export default function App() {
         tokenRef.current.region
       );
       speechConfig.speechRecognitionLanguage = "en-US";
-      try { speechConfig.speechSynthesisVoiceName = AZURE_VOICE; } catch {}
       try { synthesizerRef.current?.close?.(); } catch {}
-      synthesizerRef.current = new SpeechSDK.SpeechSynthesizer(speechConfig);
+      const audioConfig = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
+      recognizerRef.current = new SpeechSDK.SpeechRecognizer(speechConfig, audioConfig);
     } catch {}
   }, [azureReady]);
 
@@ -451,7 +450,7 @@ export default function App() {
             </label>
             
             <div style={{ fontSize: 13, color: "#666", marginLeft: "auto" }}>
-              {azureReady ? "🎙️ Premium Neural Voice Active" : browserFallbackReady ? "Browser Speech Active" : "Loading..."}
+              {azureReady ? "🎙️ OpenAI GPT Audio Active" : "Loading..."}
             </div>
           </div>
 
@@ -545,7 +544,7 @@ export default function App() {
               <button
                 onClick={speaking ? pauseOrResumeSpeaking : onPlayQuestion}
                 disabled={!question || listening}
-                title={speaking ? "Pause/Resume speaking" : "Play message"}
+                title={speaking ? (currentAudio?.paused ? "Resume" : "Pause") : "Play message"}
                 style={{
                   width: 48,
                   height: 48,
@@ -571,7 +570,7 @@ export default function App() {
                   e.currentTarget.style.transform = "scale(1)";
                 }}
               >
-                {speaking && typeof window !== "undefined" && window.speechSynthesis?.paused ? "▶️" : speaking ? "⏸" : "▶️"}
+                {speaking && currentAudio?.paused ? "▶️" : speaking ? "⏸" : "▶️"}
               </button>
               {speaking && (
                 <button

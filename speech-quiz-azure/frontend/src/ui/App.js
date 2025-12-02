@@ -21,9 +21,8 @@ export default function App() {
     const [azureReady, setAzureReady] = useState(false);
     const [browserFallbackReady, setBrowserFallbackReady] = useState(false);
     const [autoRead, setAutoRead] = useState(true);
-    // Using the most realistic, human-like voice available
-    const AZURE_VOICE = "en-US-AndrewMultilingualNeural";
-    const VOICE_STYLE = "friendly";
+    // Using OpenAI GPT Audio for most realistic voice
+    const [currentAudio, setCurrentAudio] = useState(null);
     const [browserVoices, setBrowserVoices] = useState([]);
     const recognizerRef = useRef(null);
     const synthesizerRef = useRef(null);
@@ -61,14 +60,11 @@ export default function App() {
             const speechConfig = SpeechSDK.SpeechConfig.fromAuthorizationToken(tokenRef.current.token, tokenRef.current.region);
             speechConfig.speechRecognitionLanguage = "en-US";
             try {
-                speechConfig.speechSynthesisVoiceName = AZURE_VOICE;
-            }
-            catch { }
-            try {
                 synthesizerRef.current?.close?.();
             }
             catch { }
-            synthesizerRef.current = new SpeechSDK.SpeechSynthesizer(speechConfig);
+            const audioConfig = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
+            recognizerRef.current = new SpeechSDK.SpeechRecognizer(speechConfig, audioConfig);
         }
         catch { }
     }, [azureReady]);
@@ -431,7 +427,7 @@ export default function App() {
                                     background: "#f8f9fa",
                                     borderRadius: 8,
                                     marginBottom: 24
-                                }, children: [_jsxs("label", { style: { display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }, children: [_jsx("input", { type: "checkbox", checked: autoRead, onChange: e => setAutoRead(e.target.checked) }), _jsx("span", { style: { fontSize: 14 }, children: "Auto-read questions" })] }), _jsx("div", { style: { fontSize: 13, color: "#666", marginLeft: "auto" }, children: azureReady ? "🎙️ Premium Neural Voice Active" : browserFallbackReady ? "Browser Speech Active" : "Loading..." })] }), error && (_jsxs("div", { style: {
+                                }, children: [_jsxs("label", { style: { display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }, children: [_jsx("input", { type: "checkbox", checked: autoRead, onChange: e => setAutoRead(e.target.checked) }), _jsx("span", { style: { fontSize: 14 }, children: "Auto-read questions" })] }), _jsx("div", { style: { fontSize: 13, color: "#666", marginLeft: "auto" }, children: azureReady ? "🎙️ OpenAI GPT Audio Active" : "Loading..." })] }), error && (_jsxs("div", { style: {
                                     padding: 16,
                                     backgroundColor: "#fee",
                                     border: "2px solid #f44336",
@@ -485,7 +481,7 @@ export default function App() {
                                             textAlign: "center",
                                             maxWidth: 800,
                                             marginBottom: 20
-                                        }, children: question?.question || "Loading question..." }), _jsxs("div", { style: { display: "flex", gap: 12, marginTop: 8 }, children: [_jsx("button", { onClick: speaking ? pauseOrResumeSpeaking : onPlayQuestion, disabled: !question || listening, title: speaking ? "Pause/Resume speaking" : "Play message", style: {
+                                        }, children: question?.question || "Loading question..." }), _jsxs("div", { style: { display: "flex", gap: 12, marginTop: 8 }, children: [_jsx("button", { onClick: speaking ? pauseOrResumeSpeaking : onPlayQuestion, disabled: !question || listening, title: speaking ? (currentAudio?.paused ? "Resume" : "Pause") : "Play message", style: {
                                                     width: 48,
                                                     height: 48,
                                                     backgroundColor: speaking ? "#FF9800" : "#2196F3",
@@ -506,7 +502,7 @@ export default function App() {
                                                     }
                                                 }, onMouseLeave: e => {
                                                     e.currentTarget.style.transform = "scale(1)";
-                                                }, children: speaking && typeof window !== "undefined" && window.speechSynthesis?.paused ? "▶️" : speaking ? "⏸" : "▶️" }), speaking && (_jsx("button", { onClick: stopSpeaking, title: "Stop speaking", style: {
+                                                }, children: speaking && currentAudio?.paused ? "▶️" : speaking ? "⏸" : "▶️" }), speaking && (_jsx("button", { onClick: stopSpeaking, title: "Stop speaking", style: {
                                                     width: 48,
                                                     height: 48,
                                                     backgroundColor: "#f44336",
