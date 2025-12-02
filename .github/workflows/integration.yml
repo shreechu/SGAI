@@ -1,0 +1,44 @@
+name: Integration - Backend Healthcheck
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  backend-healthcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+      - name: Install backend deps
+        working-directory: speech-quiz-azure/backend
+        run: npm ci
+      - name: Build backend
+        working-directory: speech-quiz-azure/backend
+        run: npm run build
+      - name: Start backend
+        working-directory: speech-quiz-azure/backend
+        run: |
+          node dist/index.js &
+          echo $! > /tmp/backend.pid
+      - name: Wait for backend
+        run: |
+          for i in {1..30}; do
+            if curl -sS --fail http://localhost:7071/health >/dev/null 2>&1; then
+              echo "backend ready"; break
+            fi
+            echo "waiting..."; sleep 1
+          done
+      - name: Run healthcheck script
+        run: |
+          chmod +x speech-quiz-azure/scripts/healthcheck.sh
+          bash speech-quiz-azure/scripts/healthcheck.sh
+      - name: Stop backend
+        if: always()
+        run: |
+          kill $(cat /tmp/backend.pid) || true
