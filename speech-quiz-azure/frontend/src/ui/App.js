@@ -13,6 +13,7 @@ export default function App() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [endOfQuiz, setEndOfQuiz] = useState(false);
+    const [showEndConfirmation, setShowEndConfirmation] = useState(false);
     const [seenQuestions, setSeenQuestions] = useState([]);
     const [listening, setListening] = useState(false);
     const [continuousListening, setContinuousListening] = useState(false);
@@ -179,7 +180,12 @@ export default function App() {
                     const exists = prev.some(p => p.id === resp.data.question.id);
                     if (exists)
                         return prev;
-                    return [...prev, { id: resp.data.question.id, idx: i, heading: resp.data.question.heading }];
+                    return [...prev, {
+                            id: resp.data.question.id,
+                            idx: i,
+                            heading: resp.data.question.heading,
+                            topic: resp.data.question.topic
+                        }];
                 });
             }
             // Auto-speak the question content
@@ -340,6 +346,14 @@ export default function App() {
         setTranscript("");
         onStartListening();
     }
+    function handleEndEvaluation() {
+        setShowEndConfirmation(true);
+    }
+    function confirmEndEvaluation() {
+        setShowEndConfirmation(false);
+        setEndOfQuiz(true);
+        onSubmitAll();
+    }
     function togglePauseListening() {
         // Simulate pause by stopping continuous recognition; resume restarts it and keeps collected transcript
         if (!listening)
@@ -390,28 +404,28 @@ export default function App() {
             minHeight: "100vh",
             background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
             fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
-            padding: "40px 20px"
+            padding: "20px 20px"
         }, children: [_jsxs("div", { style: { maxWidth: 1200, margin: "0 auto" }, children: [_jsxs("div", { style: {
                             textAlign: "center",
                             color: "white",
-                            marginBottom: 40
+                            marginBottom: 20
                         }, children: [_jsx("h1", { style: {
-                                    fontSize: 42,
+                                    fontSize: 32,
                                     fontWeight: 700,
-                                    marginBottom: 8,
+                                    marginBottom: 4,
                                     textShadow: "0 2px 4px rgba(0,0,0,0.1)"
-                                }, children: "Mission Critical Architect Assessment" }), _jsx("p", { style: { fontSize: 18, opacity: 0.95 }, children: "Azure Reliability & Performance Readiness" })] }), _jsxs("div", { style: {
+                                }, children: "Mission Critical Architect Assessment" }), _jsx("p", { style: { fontSize: 16, opacity: 0.95 }, children: "Azure Reliability & Performance Readiness" })] }), _jsxs("div", { style: {
                             background: "white",
                             borderRadius: 16,
                             boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
-                            padding: 32,
+                            padding: 20,
                             marginBottom: 24
                         }, children: [_jsxs("div", { style: {
-                                    padding: 20,
+                                    padding: 16,
                                     background: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
                                     borderRadius: 12,
                                     color: "white",
-                                    marginBottom: 24
+                                    marginBottom: 16
                                 }, children: [_jsx("p", { style: { marginBottom: 12, fontSize: 16, fontWeight: 600 }, children: _jsx("strong", { children: "CTO of Zava speaks:" }) }), _jsx("p", { style: { fontSize: 15, lineHeight: 1.6, opacity: 0.95 }, children: "Our mission-critical app has had too many outages, and our support experience hasn't met expectations. I need a practical plan that improves reliability quickly, shortens detection and recovery times, and brings spend under control without adding risk." }), _jsx("p", { style: { fontSize: 15, lineHeight: 1.6, opacity: 0.95, marginTop: 8 }, children: "Speak to me directly. Be clear, pragmatic, and back your recommendations with Azure best practices." })] }), _jsxs("div", { style: {
                                     display: "flex",
                                     gap: 16,
@@ -663,7 +677,133 @@ export default function App() {
                                                     }
                                                 }, onMouseLeave: e => {
                                                     e.currentTarget.style.transform = "scale(1)";
-                                                }, children: "\u27A1\uFE0F" })] })] })), endOfQuiz && !finalResults && (_jsxs("div", { style: { border: "1px solid #ddd", padding: 16, borderRadius: 8, background: "#fff" }, children: [_jsx("h3", { children: "Review your answers" }), _jsx("p", { children: "You\u2019ve reached the end. Save anything missing, then submit all to see your results with Microsoft Learn links." }), (() => {
+                                                }, children: "\u27A1\uFE0F" }), _jsx("button", { onClick: handleEndEvaluation, disabled: loading || listening || speaking || seenQuestions.length === 0, title: "End Evaluation", style: {
+                                                    padding: "12px 24px",
+                                                    backgroundColor: "#9C27B0",
+                                                    color: "white",
+                                                    border: "none",
+                                                    borderRadius: "24px",
+                                                    cursor: loading || listening || speaking || seenQuestions.length === 0 ? "not-allowed" : "pointer",
+                                                    fontSize: 14,
+                                                    fontWeight: 600,
+                                                    boxShadow: "0 4px 8px rgba(0,0,0,0.15)",
+                                                    transition: "all 200ms",
+                                                    opacity: loading || listening || speaking || seenQuestions.length === 0 ? 0.5 : 1
+                                                }, onMouseEnter: e => {
+                                                    if (!(loading || listening || speaking || seenQuestions.length === 0)) {
+                                                        e.currentTarget.style.transform = "scale(1.05)";
+                                                    }
+                                                }, onMouseLeave: e => {
+                                                    e.currentTarget.style.transform = "scale(1)";
+                                                }, children: "\uD83C\uDFC1 End Evaluation" })] })] })), showEndConfirmation && (_jsx("div", { style: {
+                                    position: "fixed",
+                                    top: 0,
+                                    left: 0,
+                                    right: 0,
+                                    bottom: 0,
+                                    backgroundColor: "rgba(0,0,0,0.6)",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    zIndex: 1000
+                                }, children: _jsxs("div", { style: {
+                                        background: "white",
+                                        borderRadius: 16,
+                                        padding: 32,
+                                        maxWidth: 500,
+                                        width: "90%",
+                                        boxShadow: "0 20px 60px rgba(0,0,0,0.3)"
+                                    }, children: [_jsx("h2", { style: { marginTop: 0, marginBottom: 16, color: "#1a237e" }, children: "End Evaluation?" }), (() => {
+                                            const unansweredTopics = seenQuestions.filter(q => !answers[q.id]);
+                                            const totalQuestions = 12;
+                                            const answeredCount = Object.keys(answers).length;
+                                            const unseenCount = totalQuestions - seenQuestions.length;
+                                            return (_jsxs(_Fragment, { children: [_jsxs("p", { style: { marginBottom: 16, color: "#37474f" }, children: ["You have answered ", _jsx("strong", { children: answeredCount }), " out of ", _jsx("strong", { children: seenQuestions.length }), " questions seen."] }), unseenCount > 0 && (_jsx("div", { style: {
+                                                            padding: 12,
+                                                            background: "#fff3e0",
+                                                            border: "2px solid #ff9800",
+                                                            borderRadius: 8,
+                                                            marginBottom: 16
+                                                        }, children: _jsxs("strong", { style: { color: "#e65100" }, children: ["\u26A0\uFE0F ", unseenCount, " questions not yet viewed"] }) })), unansweredTopics.length > 0 && (_jsxs("div", { style: {
+                                                            padding: 12,
+                                                            background: "#ffebee",
+                                                            border: "1px solid #ef5350",
+                                                            borderRadius: 8,
+                                                            marginBottom: 16
+                                                        }, children: [_jsxs("strong", { style: { color: "#c62828" }, children: ["Topics not covered (", unansweredTopics.length, "):"] }), _jsx("ul", { style: { margin: "8px 0 0 20px", paddingLeft: 0 }, children: unansweredTopics.map(q => (_jsx("li", { style: { marginBottom: 4, color: "#d32f2f" }, children: q.topic || q.heading || q.id }, q.id))) })] })), _jsx("p", { style: { marginBottom: 24, color: "#37474f" }, children: "Are you sure you want to end the evaluation and see your results?" }), _jsxs("div", { style: { display: "flex", gap: 12, justifyContent: "flex-end" }, children: [_jsx("button", { onClick: () => setShowEndConfirmation(false), style: {
+                                                                    padding: "12px 24px",
+                                                                    backgroundColor: "#9E9E9E",
+                                                                    color: "white",
+                                                                    border: "none",
+                                                                    borderRadius: 8,
+                                                                    cursor: "pointer",
+                                                                    fontSize: 14,
+                                                                    fontWeight: 600
+                                                                }, children: "No, Continue" }), _jsx("button", { onClick: confirmEndEvaluation, style: {
+                                                                    padding: "12px 24px",
+                                                                    backgroundColor: "#4CAF50",
+                                                                    color: "white",
+                                                                    border: "none",
+                                                                    borderRadius: 8,
+                                                                    cursor: "pointer",
+                                                                    fontSize: 14,
+                                                                    fontWeight: 600
+                                                                }, children: "Yes, End & Show Results" })] })] }));
+                                        })()] }) })), showEndConfirmation && (_jsx("div", { style: {
+                                    position: "fixed",
+                                    top: 0,
+                                    left: 0,
+                                    right: 0,
+                                    bottom: 0,
+                                    backgroundColor: "rgba(0,0,0,0.6)",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    zIndex: 1000
+                                }, children: _jsxs("div", { style: {
+                                        background: "white",
+                                        borderRadius: 16,
+                                        padding: 32,
+                                        maxWidth: 500,
+                                        width: "90%",
+                                        boxShadow: "0 20px 60px rgba(0,0,0,0.3)"
+                                    }, children: [_jsx("h2", { style: { marginTop: 0, marginBottom: 16, color: "#1a237e" }, children: "End Evaluation?" }), (() => {
+                                            const unansweredTopics = seenQuestions.filter(q => !answers[q.id]);
+                                            const totalQuestions = 12;
+                                            const answeredCount = Object.keys(answers).length;
+                                            const unseenCount = totalQuestions - seenQuestions.length;
+                                            return (_jsxs(_Fragment, { children: [_jsxs("p", { style: { marginBottom: 16, color: "#37474f" }, children: ["You have answered ", _jsx("strong", { children: answeredCount }), " out of ", _jsx("strong", { children: seenQuestions.length }), " questions seen."] }), unseenCount > 0 && (_jsx("div", { style: {
+                                                            padding: 12,
+                                                            background: "#fff3e0",
+                                                            border: "2px solid #ff9800",
+                                                            borderRadius: 8,
+                                                            marginBottom: 16
+                                                        }, children: _jsxs("strong", { style: { color: "#e65100" }, children: ["\u26A0\uFE0F ", unseenCount, " questions not yet viewed"] }) })), unansweredTopics.length > 0 && (_jsxs("div", { style: {
+                                                            padding: 12,
+                                                            background: "#ffebee",
+                                                            border: "1px solid #ef5350",
+                                                            borderRadius: 8,
+                                                            marginBottom: 16
+                                                        }, children: [_jsxs("strong", { style: { color: "#c62828" }, children: ["Topics not covered (", unansweredTopics.length, "):"] }), _jsx("ul", { style: { margin: "8px 0 0 20px", paddingLeft: 0 }, children: unansweredTopics.map(q => (_jsx("li", { style: { marginBottom: 4, color: "#d32f2f" }, children: q.topic || q.heading || q.id }, q.id))) })] })), _jsx("p", { style: { marginBottom: 24, color: "#37474f" }, children: "Are you sure you want to end the evaluation and see your results?" }), _jsxs("div", { style: { display: "flex", gap: 12, justifyContent: "flex-end" }, children: [_jsx("button", { onClick: () => setShowEndConfirmation(false), style: {
+                                                                    padding: "12px 24px",
+                                                                    backgroundColor: "#9E9E9E",
+                                                                    color: "white",
+                                                                    border: "none",
+                                                                    borderRadius: 8,
+                                                                    cursor: "pointer",
+                                                                    fontSize: 14,
+                                                                    fontWeight: 600
+                                                                }, children: "No, Continue" }), _jsx("button", { onClick: confirmEndEvaluation, style: {
+                                                                    padding: "12px 24px",
+                                                                    backgroundColor: "#4CAF50",
+                                                                    color: "white",
+                                                                    border: "none",
+                                                                    borderRadius: 8,
+                                                                    cursor: "pointer",
+                                                                    fontSize: 14,
+                                                                    fontWeight: 600
+                                                                }, children: "Yes, End & Show Results" })] })] }));
+                                        })()] }) })), endOfQuiz && !finalResults && (_jsxs("div", { style: { border: "1px solid #ddd", padding: 16, borderRadius: 8, background: "#fff" }, children: [_jsx("h3", { children: "Review your answers" }), _jsx("p", { children: "You\u2019ve reached the end. Save anything missing, then submit all to see your results with Microsoft Learn links." }), (() => {
                                         const unanswered = seenQuestions.filter(q => !answers[q.id]);
                                         if (unanswered.length === 0)
                                             return null;
