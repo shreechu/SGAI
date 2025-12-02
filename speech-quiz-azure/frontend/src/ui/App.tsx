@@ -35,9 +35,9 @@ export default function App() {
   const [azureReady, setAzureReady] = useState(false);
   const [browserFallbackReady, setBrowserFallbackReady] = useState(false);
   const [autoRead, setAutoRead] = useState(true);
-  const [azureVoiceName, setAzureVoiceName] = useState("en-US-JennyNeural");
+  const [azureVoiceName, setAzureVoiceName] = useState("en-US-AndrewMultilingualNeural");
   const [browserVoices, setBrowserVoices] = useState<SpeechSynthesisVoice[]>([]);
-  const [azureVoiceStyle, setAzureVoiceStyle] = useState("chat");
+  const [azureVoiceStyle, setAzureVoiceStyle] = useState("friendly");
 
   const recognizerRef = useRef<SpeechSDK.SpeechRecognizer | null>(null);
   const synthesizerRef = useRef<SpeechSDK.SpeechSynthesizer | null>(null);
@@ -125,11 +125,21 @@ export default function App() {
 
   function buildAzureSsml(text: string, voiceName: string) {
     const safe = (text || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    
+    // Check if voice supports the selected style
+    const multilingualVoices = ['AndrewMultilingualNeural', 'EmmaMultilingualNeural', 'BrianMultilingualNeural', 'AvaMultilingualNeural'];
+    const isMultilingual = multilingualVoices.some(v => voiceName.includes(v));
+    
+    // Multilingual voices support fewer styles, use default friendly/chat
+    const effectiveStyle = isMultilingual ? (azureVoiceStyle === 'friendly' || azureVoiceStyle === 'chat' ? azureVoiceStyle : 'friendly') : azureVoiceStyle;
+    
     return `<?xml version="1.0" encoding="UTF-8"?>
 <speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="en-US">
   <voice name="${voiceName}">
-    <mstts:express-as style="${azureVoiceStyle}" styledegree="1.5">
-      <prosody rate="+5%" pitch="+0%">${safe}</prosody>
+    <mstts:express-as style="${effectiveStyle}" styledegree="2">
+      <prosody rate="+8%" pitch="+2%" volume="+10%">
+        ${safe}
+      </prosody>
     </mstts:express-as>
   </voice>
 </speak>`;
@@ -466,8 +476,35 @@ export default function App() {
                     onChange={e => setAzureVoiceName(e.target.value)}
                     style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #ddd", fontSize: 14 }}
                   >
-                    {["en-US-JennyNeural", "en-US-JaneNeural", "en-US-AvaNeural", "en-US-DavisNeural", "en-US-GuyNeural", "en-GB-LibbyNeural", "en-GB-RyanNeural", "en-AU-NatashaNeural", "en-IN-NeerjaNeural"].map(v => (
-                      <option key={v} value={v}>{v}</option>
+                    {[
+                      "en-US-AndrewMultilingualNeural",
+                      "en-US-EmmaMultilingualNeural",
+                      "en-US-BrianMultilingualNeural",
+                      "en-US-AvaMultilingualNeural",
+                      "en-US-JennyNeural",
+                      "en-US-GuyNeural",
+                      "en-US-AriaNeural",
+                      "en-US-DavisNeural",
+                      "en-US-JaneNeural",
+                      "en-US-JasonNeural",
+                      "en-US-SaraNeural",
+                      "en-US-TonyNeural",
+                      "en-US-NancyNeural",
+                      "en-US-AmberNeural",
+                      "en-US-AnaNeural",
+                      "en-US-AshleyNeural",
+                      "en-US-BrandonNeural",
+                      "en-US-ChristopherNeural",
+                      "en-US-CoraNeural",
+                      "en-US-ElizabethNeural",
+                      "en-US-EricNeural",
+                      "en-US-JacobNeural",
+                      "en-US-MichelleNeural",
+                      "en-US-MonicaNeural",
+                      "en-US-RogerNeural",
+                      "en-US-SteffanNeural"
+                    ].map(v => (
+                      <option key={v} value={v}>{v.replace('Neural', '').replace('Multilingual', ' (Multilingual)')}</option>
                     ))}
                   </select>
                   <span style={{ color: "#555", fontSize: 14, fontWeight: 600 }}>Style:</span>
@@ -476,8 +513,19 @@ export default function App() {
                     onChange={e => setAzureVoiceStyle(e.target.value)}
                     style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #ddd", fontSize: 14 }}
                   >
-                    {["chat", "customerservice", "newscast-casual", "empathetic"].map(s => (
-                      <option key={s} value={s}>{s}</option>
+                    {[
+                      "friendly",
+                      "chat",
+                      "cheerful",
+                      "empathetic",
+                      "calm",
+                      "assistant",
+                      "customerservice",
+                      "newscast-casual",
+                      "professional",
+                      "excited"
+                    ].map(s => (
+                      <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
                     ))}
                   </select>
                 </div>

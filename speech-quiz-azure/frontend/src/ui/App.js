@@ -21,9 +21,9 @@ export default function App() {
     const [azureReady, setAzureReady] = useState(false);
     const [browserFallbackReady, setBrowserFallbackReady] = useState(false);
     const [autoRead, setAutoRead] = useState(true);
-    const [azureVoiceName, setAzureVoiceName] = useState("en-US-JennyNeural");
+    const [azureVoiceName, setAzureVoiceName] = useState("en-US-AndrewMultilingualNeural");
     const [browserVoices, setBrowserVoices] = useState([]);
-    const [azureVoiceStyle, setAzureVoiceStyle] = useState("chat");
+    const [azureVoiceStyle, setAzureVoiceStyle] = useState("friendly");
     const recognizerRef = useRef(null);
     const synthesizerRef = useRef(null);
     const webVoiceRef = useRef(null);
@@ -112,11 +112,18 @@ export default function App() {
     }
     function buildAzureSsml(text, voiceName) {
         const safe = (text || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        // Check if voice supports the selected style
+        const multilingualVoices = ['AndrewMultilingualNeural', 'EmmaMultilingualNeural', 'BrianMultilingualNeural', 'AvaMultilingualNeural'];
+        const isMultilingual = multilingualVoices.some(v => voiceName.includes(v));
+        // Multilingual voices support fewer styles, use default friendly/chat
+        const effectiveStyle = isMultilingual ? (azureVoiceStyle === 'friendly' || azureVoiceStyle === 'chat' ? azureVoiceStyle : 'friendly') : azureVoiceStyle;
         return `<?xml version="1.0" encoding="UTF-8"?>
 <speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="en-US">
   <voice name="${voiceName}">
-    <mstts:express-as style="${azureVoiceStyle}" styledegree="1.5">
-      <prosody rate="+5%" pitch="+0%">${safe}</prosody>
+    <mstts:express-as style="${effectiveStyle}" styledegree="2">
+      <prosody rate="+8%" pitch="+2%" volume="+10%">
+        ${safe}
+      </prosody>
     </mstts:express-as>
   </voice>
 </speak>`;
@@ -437,7 +444,45 @@ export default function App() {
                                     background: "#f8f9fa",
                                     borderRadius: 8,
                                     marginBottom: 24
-                                }, children: [_jsxs("label", { style: { display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }, children: [_jsx("input", { type: "checkbox", checked: autoRead, onChange: e => setAutoRead(e.target.checked) }), _jsx("span", { style: { fontSize: 14 }, children: "Auto-read questions" })] }), _jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8 }, children: [_jsx("span", { style: { color: "#555", fontSize: 14, fontWeight: 600 }, children: "Voice:" }), azureReady ? (_jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8 }, children: [_jsx("select", { value: azureVoiceName, onChange: e => setAzureVoiceName(e.target.value), style: { padding: "6px 10px", borderRadius: 6, border: "1px solid #ddd", fontSize: 14 }, children: ["en-US-JennyNeural", "en-US-JaneNeural", "en-US-AvaNeural", "en-US-DavisNeural", "en-US-GuyNeural", "en-GB-LibbyNeural", "en-GB-RyanNeural", "en-AU-NatashaNeural", "en-IN-NeerjaNeural"].map(v => (_jsx("option", { value: v, children: v }, v))) }), _jsx("span", { style: { color: "#555", fontSize: 14, fontWeight: 600 }, children: "Style:" }), _jsx("select", { value: azureVoiceStyle, onChange: e => setAzureVoiceStyle(e.target.value), style: { padding: "6px 10px", borderRadius: 6, border: "1px solid #ddd", fontSize: 14 }, children: ["chat", "customerservice", "newscast-casual", "empathetic"].map(s => (_jsx("option", { value: s, children: s }, s))) })] })) : browserFallbackReady ? (_jsx("select", { value: webVoiceRef.current?.name || "", onChange: e => {
+                                }, children: [_jsxs("label", { style: { display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }, children: [_jsx("input", { type: "checkbox", checked: autoRead, onChange: e => setAutoRead(e.target.checked) }), _jsx("span", { style: { fontSize: 14 }, children: "Auto-read questions" })] }), _jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8 }, children: [_jsx("span", { style: { color: "#555", fontSize: 14, fontWeight: 600 }, children: "Voice:" }), azureReady ? (_jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8 }, children: [_jsx("select", { value: azureVoiceName, onChange: e => setAzureVoiceName(e.target.value), style: { padding: "6px 10px", borderRadius: 6, border: "1px solid #ddd", fontSize: 14 }, children: [
+                                                            "en-US-AndrewMultilingualNeural",
+                                                            "en-US-EmmaMultilingualNeural",
+                                                            "en-US-BrianMultilingualNeural",
+                                                            "en-US-AvaMultilingualNeural",
+                                                            "en-US-JennyNeural",
+                                                            "en-US-GuyNeural",
+                                                            "en-US-AriaNeural",
+                                                            "en-US-DavisNeural",
+                                                            "en-US-JaneNeural",
+                                                            "en-US-JasonNeural",
+                                                            "en-US-SaraNeural",
+                                                            "en-US-TonyNeural",
+                                                            "en-US-NancyNeural",
+                                                            "en-US-AmberNeural",
+                                                            "en-US-AnaNeural",
+                                                            "en-US-AshleyNeural",
+                                                            "en-US-BrandonNeural",
+                                                            "en-US-ChristopherNeural",
+                                                            "en-US-CoraNeural",
+                                                            "en-US-ElizabethNeural",
+                                                            "en-US-EricNeural",
+                                                            "en-US-JacobNeural",
+                                                            "en-US-MichelleNeural",
+                                                            "en-US-MonicaNeural",
+                                                            "en-US-RogerNeural",
+                                                            "en-US-SteffanNeural"
+                                                        ].map(v => (_jsx("option", { value: v, children: v.replace('Neural', '').replace('Multilingual', ' (Multilingual)') }, v))) }), _jsx("span", { style: { color: "#555", fontSize: 14, fontWeight: 600 }, children: "Style:" }), _jsx("select", { value: azureVoiceStyle, onChange: e => setAzureVoiceStyle(e.target.value), style: { padding: "6px 10px", borderRadius: 6, border: "1px solid #ddd", fontSize: 14 }, children: [
+                                                            "friendly",
+                                                            "chat",
+                                                            "cheerful",
+                                                            "empathetic",
+                                                            "calm",
+                                                            "assistant",
+                                                            "customerservice",
+                                                            "newscast-casual",
+                                                            "professional",
+                                                            "excited"
+                                                        ].map(s => (_jsx("option", { value: s, children: s.charAt(0).toUpperCase() + s.slice(1) }, s))) })] })) : browserFallbackReady ? (_jsx("select", { value: webVoiceRef.current?.name || "", onChange: e => {
                                                     const v = browserVoices.find(bv => bv.name === e.target.value) || null;
                                                     webVoiceRef.current = v;
                                                     // If currently speaking with browser speech, restart with new voice
