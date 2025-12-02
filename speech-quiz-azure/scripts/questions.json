@@ -1,18 +1,201 @@
 [
-  {
-     "id": "q1",
-     "topic": "World History",
-     "difficulty": "easy",
-     "heading": "Ancient Civilizations",
-     "question": "Describe three key achievements of the ancient Egyptians.",
-     "key_phrases": ["pyramids", "hieroglyphics", "irrigation", "mummification"]
-  },
-  {
-     "id": "q2",
-     "topic": "Biology",
-     "difficulty": "medium",
-     "heading": "Cell Biology",
-     "question": "What are the main differences between prokaryotic and eukaryotic cells?",
-     "key_phrases": ["nucleus", "membrane-bound organelles", "size", "ribosomes"]
-  }
+   {
+      "id": "q1",
+      "topic": "Introduction",
+      "difficulty": "easy",
+      "heading": "Opening — Mark Starts",
+      "question": "I'm Mark, CTO at Zava, where I oversee our entire technology landscape — infrastructure, platform services, engineering, security, and reliability strategy. Our e-commerce environment is mission critical, and any downtime immediately impacts revenue and customer trust. Thanks for joining today. Before we dive into the specific issues, could you introduce yourself and your role at Microsoft?",
+      "key_phrases": [
+         "Mission Critical Team",
+         "platform resiliency engineering",
+         "architectural governance",
+         "incident response acceleration",
+         "failure-domain analysis",
+         "predictable uptime",
+         "operational clarity",
+         "engineering-led support"
+      ]
+   },
+   {
+      "id": "q2",
+      "topic": "Recent Instability",
+      "difficulty": "medium",
+      "heading": "Business Risk & Impact",
+      "question": "We've seen more instability lately. Even small disruptions have outsized impact on revenue and customer experience. It feels like the risk profile is increasing. What's your assessment?",
+      "key_phrases": [
+         "fault domains",
+         "zone alignment",
+         "dependency chains",
+         "capacity-related behaviors",
+         "recurring instability",
+         "predictability",
+         "vulnerabilities"
+      ]
+   },
+   {
+      "id": "q3",
+      "topic": "Zonal Architecture",
+      "difficulty": "hard",
+      "heading": "Zonal Adoption & Gaps",
+      "question": "One area my team raised is inconsistent zonal adoption. What's the real exposure here, and how do we fix it?",
+      "key_phrases": [
+         "zonal",
+         "zone-redundant",
+         "zonal outages",
+         "upgrade domain",
+         "platform maintenance",
+         "capacity imbalance",
+         "zonal landing zone",
+         "failover boundaries",
+         "cross-zone traffic"
+      ]
+   },
+   {
+      "id": "q4",
+      "topic": "Zone Mapping",
+      "difficulty": "medium",
+      "heading": "Physical vs Logical Zones",
+      "question": "Another thing I hear from peers is frustration around physical and logical zone mapping being opaque. How does that affect us?",
+      "key_phrases": [
+         "physical-to-logical mapping",
+         "hardware expansion",
+         "capacity balancing",
+         "placement insights",
+         "zone mapping strategy",
+         "predictability"
+      ]
+   },
+   {
+      "id": "q5",
+      "topic": "Capacity Constraints",
+      "difficulty": "hard",
+      "heading": "Regional Capacity Issues",
+      "question": "My teams have seen 'allocation failed' errors and scaling delays. Are certain regions constrained, and how do we mitigate that?",
+      "key_phrases": [
+         "SKU-specific capacity",
+         "GPU constraints",
+         "zonal capacity imbalances",
+         "scale-out delays",
+         "Reserved capacity",
+         "alternate region",
+         "SKU rationalization",
+         "capacity teams"
+      ]
+   },
+   {
+      "id": "q6",
+      "topic": "Platform Updates",
+      "difficulty": "medium",
+      "heading": "Azure Update Impact",
+      "question": "Some issues appear to correlate with Azure updates. Can those updates cause instability for us?",
+      "key_phrases": [
+         "update domain isolation",
+         "zonal redundancy",
+         "rolling platform updates",
+         "fault domains",
+         "maintenance visibility",
+         "update-tolerant architectures"
+      ]
+   },
+   {
+      "id": "q7",
+      "topic": "Incident Response",
+      "difficulty": "medium",
+      "heading": "Support Speed & Escalation",
+      "question": "When incidents occur, support response feels too slow and too disconnected. How does Mission Critical change that?",
+      "key_phrases": [
+         "engineering-first escalation",
+         "Azure product groups",
+         "single point of accountability",
+         "influence without authority",
+         "accelerate response"
+      ]
+   },
+   {
+      "id": "q8",
+      "topic": "RCA Quality",
+      "difficulty": "hard",
+      "heading": "Engineering RCA Depth",
+      "question": "We need RCAs with more substance. What we've been getting is too high-level. What should a proper Mission Critical RCA include?",
+      "key_phrases": [
+         "deep engineering analysis",
+         "causal chains",
+         "time-sequenced events",
+         "failure-domain identification",
+         "platform vs configuration",
+         "corrective action",
+         "owner"
+      ]
+   },
+   {
+      "id": "q9",
+      "topic": "Security Posture",
+      "difficulty": "hard",
+      "heading": "Security Assessment",
+      "question": "I need greater assurance that our security posture matches our scale and exposure. What does that assessment look like?",
+      "key_phrases": [
+         "Identity controls",
+         "MFA",
+         "Conditional Access",
+         "segmentation",
+         "Key Vault redundancy",
+         "encryption boundaries",
+         "SIEM coverage",
+         "PCI-DSS",
+         "shadow dependency"
+      ]
+   },
+   {
+      "id": "q10",
+      "topic": "Global Expansion",
+      "difficulty": "medium",
+      "heading": "Region Pairs & Strategy",
+      "question": "As we expand internationally, we need clarity on region and region pair strategy. What should we know?",
+      "key_phrases": [
+         "Region pairs",
+         "Disaster recovery",
+         "Update sequencing",
+         "Data residency",
+         "Fault isolation",
+         "planned maintenance",
+         "active-active",
+         "active-passive",
+         "failover",
+         "latency models"
+      ]
+   },
+   {
+      "id": "q11",
+      "topic": "Reliability Roadmap",
+      "difficulty": "hard",
+      "heading": "Long-Term Modernization",
+      "question": "So what's the forward plan? I need to see a credible path to predictable stability.",
+      "key_phrases": [
+         "Zonal Reinforcement",
+         "Resiliency Modernization",
+         "Capacity Assurance",
+         "Operational Uplift",
+         "Security Hardening",
+         "Engineering-Level Escalation",
+         "Architecture Governance",
+         "SLO/SLA mapping",
+         "policy governance",
+         "configuration drift"
+      ]
+   },
+   {
+      "id": "q12",
+      "topic": "Closing",
+      "difficulty": "easy",
+      "heading": "Wrap-Up & Commitment",
+      "question": "This was extremely valuable. The depth and clarity help me understand both the risks and the path forward. What's your commitment to Zava?",
+      "key_phrases": [
+         "engineering-led predictability",
+         "reliability",
+         "operational excellence",
+         "mission-critical",
+         "partner",
+         "business impact"
+      ]
+   }
 ]

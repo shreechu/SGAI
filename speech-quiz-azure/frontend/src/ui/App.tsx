@@ -13,17 +13,31 @@ type Question = {
   difficulty?: string;
 };
 
+type LearnLink = { title: string; url: string };
+type FinalItem = { questionId: string; heading?: string; topic?: string; evaluation: any; learnLinks: LearnLink[] };
+type FinalResults = { overallScore: number; results: FinalItem[] };
+
 export default function App() {
   const [question, setQuestion] = useState<Question | null>(null);
   const [idx, setIdx] = useState(0);
   const [transcript, setTranscript] = useState("");
-  const [evaluation, setEvaluation] = useState<any>(null);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [finalResults, setFinalResults] = useState<FinalResults | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [endOfQuiz, setEndOfQuiz] = useState(false);
+  const [seenQuestions, setSeenQuestions] = useState<Array<{ id: string; idx: number; heading?: string }>>([]);
+  
   const [listening, setListening] = useState(false);
+  const [continuousListening, setContinuousListening] = useState(false);
   const [speaking, setSpeaking] = useState(false);
+  const [pausedListening, setPausedListening] = useState(false);
   const [azureReady, setAzureReady] = useState(false);
   const [browserFallbackReady, setBrowserFallbackReady] = useState(false);
+  const [autoRead, setAutoRead] = useState(true);
+  const [azureVoiceName, setAzureVoiceName] = useState("en-US-JennyNeural");
+  const [browserVoices, setBrowserVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [azureVoiceStyle, setAzureVoiceStyle] = useState("chat");
 
   const recognizerRef = useRef<SpeechSDK.SpeechRecognizer | null>(null);
   const synthesizerRef = useRef<SpeechSDK.SpeechSynthesizer | null>(null);
@@ -44,8 +58,8 @@ export default function App() {
         const assignVoice = () => {
           const voices = window.speechSynthesis.getVoices();
           if (voices && voices.length) {
-            webVoiceRef.current =
-              voices.find(v => v.lang?.toLowerCase().startsWith("en")) || voices[0] || null;
+            setBrowserVoices(voices);
+            webVoiceRef.current = voices.find(v => v.lang?.toLowerCase().startsWith("en")) || voices[0] || null;
           }
         };
         window.speechSynthesis.onvoiceschanged = assignVoice;
@@ -53,6 +67,21 @@ export default function App() {
       }
     } catch {}
   }, []);
+
+  // Rebuild Azure synthesizer when voice changes
+  useEffect(() => {
+    if (!azureReady || !tokenRef.current) return;
+    try {
+      const speechConfig = SpeechSDK.SpeechConfig.fromAuthorizationToken(
+        tokenRef.current.token,
+        tokenRef.current.region
+      );
+      speechConfig.speechRecognitionLanguage = "en-US";
+      try { speechConfig.speechSynthesisVoiceName = azureVoiceName || DEFAULT_AZURE_VOICE; } catch {}
+      try { synthesizerRef.current?.close?.(); } catch {}
+      synthesizerRef.current = new SpeechSDK.SpeechSynthesizer(speechConfig);
+    } catch {}
+  }, [azureVoiceName, azureReady]);
 
   async function fetchToken() {
     try {
@@ -70,7 +99,7 @@ export default function App() {
       const speechConfig = SpeechSDK.SpeechConfig.fromAuthorizationToken(tokenInfo.token, tokenInfo.region);
       speechConfig.speechRecognitionLanguage = "en-US";
       // Set a pleasant neural voice for TTS
-      try { speechConfig.speechSynthesisVoiceName = DEFAULT_AZURE_VOICE; } catch {}
+      try { speechConfig.speechSynthesisVoiceName = azureVoiceName || DEFAULT_AZURE_VOICE; } catch {}
 
       const audioConfig = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
       recognizerRef.current = new SpeechSDK.SpeechRecognizer(speechConfig, audioConfig);
@@ -82,6 +111,18 @@ export default function App() {
     }
   }
 
+  function buildAzureSsml(text: string, voiceName: string) {
+    const safe = (text || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="en-US">
+  <voice name="${voiceName}">
+    <mstts:express-as style="${azureVoiceStyle}" styledegree="1.5">
+      <prosody rate="+5%" pitch="+0%">${safe}</prosody>
+    </mstts:express-as>
+  </voice>
+</speak>`;
+  }
+
   // Speak helper that uses Azure when available, else browser speech
   function speakText(text: string) {
     if (!text) return;
@@ -89,8 +130,9 @@ export default function App() {
     // Azure path
     if (synthesizerRef.current) {
       try {
-        synthesizerRef.current.speakTextAsync(
-          text,
+        const ssml = buildAzureSsml(text, azureVoiceName || DEFAULT_AZURE_VOICE);
+        (synthesizerRef.current as any).speakSsmlAsync(
+          ssml,
           () => setSpeaking(false),
           (err: any) => { console.error(err); setSpeaking(false); }
         );
@@ -103,6 +145,8 @@ export default function App() {
     if (typeof window !== "undefined" && window.speechSynthesis) {
       const u = new SpeechSynthesisUtterance(text);
       if (webVoiceRef.current) u.voice = webVoiceRef.current;
+      u.rate = 1.05; // slightly more natural pacing
+      u.pitch = 1.0;
       u.onend = () => setSpeaking(false);
       u.onerror = () => setSpeaking(false);
       window.speechSynthesis.speak(u);
@@ -110,6 +154,32 @@ export default function App() {
     }
     setSpeaking(false);
     setError("No TTS available. Configure Azure Speech or use a browser with speechSynthesis support.");
+  }
+
+  function stopSpeaking() {
+    try {
+      // Browser speech: cancel queue
+      if (typeof window !== "undefined" && window.speechSynthesis) {
+        try { window.speechSynthesis.cancel(); } catch {}
+      }
+      // Azure speech: try stopSpeakingAsync if available, else recreate synthesizer
+      const synth: any = synthesizerRef.current as any;
+      if (synth && typeof synth.stopSpeakingAsync === "function") {
+        try { synth.stopSpeakingAsync(() => {}, () => {}); } catch {}
+      } else if (synth && typeof synth.close === "function") {
+        try { synth.close(); } catch {}
+        // Recreate synthesizer so future TTS still works
+        try {
+          if (tokenRef.current) {
+            const cfg = SpeechSDK.SpeechConfig.fromAuthorizationToken(tokenRef.current.token, tokenRef.current.region);
+            try { cfg.speechSynthesisVoiceName = azureVoiceName || DEFAULT_AZURE_VOICE; } catch {}
+            synthesizerRef.current = new SpeechSDK.SpeechSynthesizer(cfg);
+          }
+        } catch {}
+      }
+    } finally {
+      setSpeaking(false);
+    }
   }
 
   async function fetchQuestion(i: number) {
@@ -120,9 +190,18 @@ export default function App() {
       setQuestion(resp.data.question);
       setIdx(resp.data.nextIndex);
       setTranscript("");
-      setEvaluation(null);
+      if (!resp.data.question) {
+        setEndOfQuiz(true);
+      }
+      if (resp.data.question) {
+        setSeenQuestions(prev => {
+          const exists = prev.some(p => p.id === resp.data.question.id);
+          if (exists) return prev;
+          return [...prev, { id: resp.data.question.id, idx: i, heading: (resp.data.question as any).heading }];
+        });
+      }
       // Auto-speak the question content
-      if (resp.data?.question?.question) {
+      if (autoRead && resp.data?.question?.question) {
         speakText(resp.data.question.question);
       }
     } catch (err: any) {
@@ -145,18 +224,36 @@ export default function App() {
       setError(null);
 
       if (azureReady && recognizerRef.current) {
-        // Azure Speech recognition (single utterance)
-        recognizerRef.current.recognizeOnceAsync((result) => {
-          if (result.reason === SpeechSDK.ResultReason.RecognizedSpeech) {
-            setTranscript(result.text);
-          } else if (result.reason === SpeechSDK.ResultReason.NoMatch) {
-            setError("No speech detected. Please try again.");
-          } else if (result.reason === SpeechSDK.ResultReason.Canceled) {
-            const cancellation = SpeechSDK.CancellationDetails.fromResult(result);
-            setError(`Recognition error: ${cancellation.errorDetails}`);
-          }
+        // Azure Speech continuous recognition for extended speaking time
+        setContinuousListening(true);
+        let collected = "";
+        recognizerRef.current.recognized = (_s: any, e: any) => {
+          try {
+            const text: string = e?.result?.text || "";
+            if (text) {
+              collected = collected ? `${collected} ${text}` : text;
+              setTranscript(collected);
+            }
+          } catch {}
+        };
+        recognizerRef.current.canceled = (_s: any, e: any) => {
+          setError(`Recognition canceled: ${e?.errorDetails || "unknown"}`);
           setListening(false);
-        });
+          setContinuousListening(false);
+          try { recognizerRef.current?.stopContinuousRecognitionAsync?.(() => {}, () => {}); } catch {}
+        };
+        recognizerRef.current.sessionStopped = () => {
+          setListening(false);
+          setContinuousListening(false);
+        };
+        recognizerRef.current.startContinuousRecognitionAsync(
+          () => {},
+          (err: any) => {
+            setError(`Failed to start recognition: ${err?.message || err}`);
+            setListening(false);
+            setContinuousListening(false);
+          }
+        );
         return;
       }
 
@@ -166,20 +263,30 @@ export default function App() {
       if (SR) {
         const rec = new SR();
         rec.lang = "en-US";
-        rec.continuous = false;
-        rec.interimResults = false;
+        rec.continuous = true; // allow extended speech
+        rec.interimResults = true;
+        let collected = "";
         rec.onresult = (e: any) => {
           try {
-            const text = e.results?.[0]?.[0]?.transcript || "";
-            setTranscript(text);
+            for (let i = e.resultIndex; i < e.results.length; i++) {
+              const res = e.results[i];
+              if (res.isFinal) {
+                const text = res[0].transcript || "";
+                if (text) {
+                  collected = collected ? `${collected} ${text}` : text;
+                  setTranscript(collected);
+                }
+              }
+            }
           } catch {}
         };
         rec.onerror = (e: any) => {
           console.error(e);
           setError(`Recognition error: ${e?.error || "unknown"}`);
         };
-        rec.onend = () => setListening(false);
+        rec.onend = () => { setListening(false); setContinuousListening(false); };
         rec.start();
+        setContinuousListening(true);
         return;
       }
 
@@ -191,36 +298,64 @@ export default function App() {
     }
   }
 
-  async function onSubmitAnswer() {
-    if (!question || !transcript.trim()) {
-      setError("Please speak an answer or type one manually");
+  function onStopListening() {
+    try {
+      setListening(false);
+      setContinuousListening(false);
+      // Azure
+      try { recognizerRef.current?.stopContinuousRecognitionAsync?.(() => {}, () => {}); } catch {}
+      // Browser
+      const w = window as any;
+      const SR = w?.SpeechRecognition || w?.webkitSpeechRecognition;
+      if (SR && w?.currentRecognizerInstance) {
+        try { w.currentRecognizerInstance.stop?.(); } catch {}
+      }
+    } catch {}
+  }
+
+  function onRetryRecording() {
+    setTranscript("");
+    onStartListening();
+  }
+
+  function togglePauseListening() {
+    // Simulate pause by stopping continuous recognition; resume restarts it and keeps collected transcript
+    if (!listening) return;
+    if (!pausedListening) {
+      onStopListening();
+      setPausedListening(true);
+    } else {
+      setPausedListening(false);
+      onStartListening();
+    }
+  }
+
+  function onSaveAnswer() {
+    if (!question) return;
+    const text = transcript.trim();
+    if (!text) {
+      setError("Please speak an answer or type one before saving");
       return;
     }
+    setAnswers(prev => ({ ...prev, [question.id]: text }));
+  }
+
+  function goToQuestionById(qid: string) {
+    const target = seenQuestions.find(sq => sq.id === qid);
+    if (!target) return;
+    setEndOfQuiz(false);
+    fetchQuestion(target.idx);
+  }
+
+  async function onSubmitAll() {
     try {
       setLoading(true);
       setError(null);
-      const resp = await axios.post("/api/evaluate", {
-        transcript,
-        question,
-        sessionId: "local-session"
-      });
-      setEvaluation(resp.data.evaluation);
-
-      // Speak the feedback
-      const feedbackText = `Score ${resp.data.evaluation.score}. ${resp.data.evaluation.feedback}`;
-      if (synthesizerRef.current) {
-        setSpeaking(true);
-        synthesizerRef.current.speakTextAsync(
-          feedbackText,
-          () => setSpeaking(false),
-          (err: any) => {
-            console.error("TTS feedback error:", err);
-            setSpeaking(false);
-          }
-        );
-      }
+      const answersArray = Object.entries(answers).map(([questionId, transcript]) => ({ questionId, transcript }));
+      const resp = await axios.post("/api/evaluate-all", { sessionId: "local-session", answers: answersArray });
+      setFinalResults(resp.data);
     } catch (err: any) {
-      setError(`Evaluation failed: ${err.message}`);
+      setError(`Final evaluation failed: ${err.message}`);
       console.error(err);
     } finally {
       setLoading(false);
@@ -239,11 +374,49 @@ export default function App() {
         background: "#fafafa"
       }}>
         <p style={{ marginBottom: 6 }}>
-          <strong>Bot (CTO of Zava):</strong> I’m concerned about frequent outages impacting our mission-critical application. I’m unhappy with the support quality we’ve received so far and I’m skeptical about the practicality and risks of the recommendations you’ve proposed.
+          <strong>CTO of Zava (speaking to you):</strong> Our mission-critical app has had too many outages, and our support experience hasn’t met expectations. I need a practical plan that improves reliability quickly, shortens detection and recovery times, and brings spend under control without adding risk.
         </p>
         <p>
-          <strong>You (Microsoft Architect):</strong> Engage, clarify constraints, and address risk, support quality, and implementation concerns. Provide actionable, prioritized steps to improve reliability.
+          Speak to me directly. Be clear, pragmatic, and back your recommendations with Azure best practices.
         </p>
+      </div>
+
+      {/* Auto-read toggle and Voice selector */}
+      <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <input type="checkbox" checked={autoRead} onChange={e => setAutoRead(e.target.checked)} />
+          Auto-read questions
+        </label>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ color: "#333" }}>Voice:</span>
+          {azureReady ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <select value={azureVoiceName} onChange={e => setAzureVoiceName(e.target.value)}>
+                {["en-US-JennyNeural", "en-US-JaneNeural", "en-US-AvaNeural", "en-US-DavisNeural", "en-US-GuyNeural", "en-GB-LibbyNeural", "en-GB-RyanNeural", "en-AU-NatashaNeural", "en-IN-NeerjaNeural"].map(v => (
+                  <option key={v} value={v}>{v}</option>
+                ))}
+              </select>
+              <span style={{ color: "#333" }}>Style:</span>
+              <select value={azureVoiceStyle} onChange={e => setAzureVoiceStyle(e.target.value)}>
+                {["chat", "customerservice", "newscast-casual", "empathetic"].map(s => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </div>
+          ) : browserFallbackReady ? (
+            <select value={webVoiceRef.current?.name || ""} onChange={e => {
+              const v = browserVoices.find(bv => bv.name === e.target.value) || null;
+              webVoiceRef.current = v;
+            }}>
+              {browserVoices.map(v => (
+                <option key={v.name} value={v.name}>{v.name} ({v.lang})</option>
+              ))}
+            </select>
+          ) : (
+            <span style={{ color: "#666" }}>Loading voices…</span>
+          )}
+        </div>
       </div>
 
       {error && (
@@ -261,19 +434,21 @@ export default function App() {
         </div>
       )}
 
-      <div style={{ marginBottom: 16, display: "flex", gap: 8 }}>
-        <button
-          onClick={() => fetchQuestion(idx)}
-          disabled={loading || listening || speaking}
-          style={{
-            padding: "10px 16px",
-            cursor: loading || listening || speaking ? "not-allowed" : "pointer",
-            opacity: loading || listening || speaking ? 0.6 : 1
-          }}
-        >
-          {loading ? "Loading..." : "Next Question"}
-        </button>
-      </div>
+      {!endOfQuiz && (
+        <div style={{ marginBottom: 16, display: "flex", gap: 8 }}>
+          <button
+            onClick={() => fetchQuestion(idx)}
+            disabled={loading || listening || speaking}
+            style={{
+              padding: "10px 16px",
+              cursor: loading || listening || speaking ? "not-allowed" : "pointer",
+              opacity: loading || listening || speaking ? 0.6 : 1
+            }}
+          >
+            {loading ? "Loading..." : "Next Question"}
+          </button>
+        </div>
+      )}
 
       <div
         style={{
@@ -284,7 +459,7 @@ export default function App() {
           marginBottom: 16
         }}
       >
-        <h3 style={{ display: "flex", alignItems: "center", gap: 12 }}>📝 Question</h3>
+        <h3 style={{ display: "flex", alignItems: "center", gap: 12 }}>🗣️ CTO</h3>
         <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
           <img
             src="/bot.svg"
@@ -313,31 +488,29 @@ export default function App() {
             cursor: !question || listening || speaking ? "not-allowed" : "pointer"
           }}
         >
-          {speaking ? "🔊 Playing..." : "🔊 Play Question"}
+          {speaking ? "🔊 Playing..." : "🔊 Play Message"}
         </button>
-        {question?.key_phrases && (
-          <div style={{ marginTop: 12 }}>
-            <strong>Key phrases to cover:</strong>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
-              {question.key_phrases.map((phrase, i) => (
-                <span
-                  key={i}
-                  style={{
-                    backgroundColor: "#e0e7ff",
-                    padding: "6px 12px",
-                    borderRadius: 4,
-                    fontSize: 14,
-                    fontWeight: 500
-                  }}
-                >
-                  {phrase}
-                </span>
-              ))}
-            </div>
-          </div>
+        {speaking && (
+          <button
+            onClick={stopSpeaking}
+            style={{
+              marginLeft: 8,
+              padding: "8px 16px",
+              backgroundColor: "#f44336",
+              color: "white",
+              border: "none",
+              borderRadius: 4,
+              cursor: "pointer"
+            }}
+          >
+            ⏹ Stop
+          </button>
         )}
+        {/* Pause/Resume applies to user recording, not bot speech */}
+        {/* key_phrases are intentionally hidden in the UI; used only for evaluation */}
       </div>
 
+      {!endOfQuiz && (
       <div
         style={{
           border: "2px solid #4CAF50",
@@ -367,6 +540,42 @@ export default function App() {
         >
           {listening ? "🎤 Listening..." : "🎤 Start Listening"}
         </button>
+        {listening && (
+          <button
+            onClick={onStopListening}
+            style={{
+              marginLeft: 8,
+              padding: "12px 24px",
+              backgroundColor: "#f44336",
+              color: "white",
+              border: "none",
+              borderRadius: 4,
+              cursor: "pointer",
+              fontSize: 16,
+              fontWeight: "bold"
+            }}
+          >
+            ⏹ Stop Listening
+          </button>
+        )}
+        {listening && (
+          <button
+            onClick={togglePauseListening}
+            style={{
+              marginLeft: 8,
+              padding: "12px 24px",
+              backgroundColor: pausedListening ? "#3F51B5" : "#9E9E9E",
+              color: "white",
+              border: "none",
+              borderRadius: 4,
+              cursor: "pointer",
+              fontSize: 16,
+              fontWeight: "bold"
+            }}
+          >
+            {pausedListening ? "▶️ Resume Listening" : "⏸️ Pause Listening"}
+          </button>
+        )}
 
         {/* Indicator of which speech path is active */}
         <div style={{ marginTop: 8, color: "#666", fontSize: 13 }}>
@@ -388,51 +597,217 @@ export default function App() {
           </div>
         )}
 
-        <button
-          onClick={onSubmitAnswer}
-          disabled={loading || listening || !transcript.trim() || !question}
-          style={{
-            padding: "12px 24px",
-            marginTop: 12,
-            backgroundColor: "#4CAF50",
-            color: "white",
-            border: "none",
-            borderRadius: 4,
-            cursor: loading || listening || !transcript.trim() || !question ? "not-allowed" : "pointer",
-            fontSize: 16,
-            fontWeight: "bold"
-          }}
-        >
-          {loading ? "Evaluating..." : "✅ Submit Answer"}
-        </button>
+        <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+          <button
+            onClick={onSaveAnswer}
+            disabled={loading || listening || !transcript.trim() || !question}
+            style={{
+              padding: "12px 24px",
+              backgroundColor: "#4CAF50",
+              color: "white",
+              border: "none",
+              borderRadius: 4,
+              cursor: loading || listening || !transcript.trim() || !question ? "not-allowed" : "pointer",
+              fontSize: 16,
+              fontWeight: "bold"
+            }}
+          >
+            💾 Save Answer
+          </button>
+          <button
+            onClick={onRetryRecording}
+            disabled={loading || listening}
+            style={{
+              padding: "12px 24px",
+              backgroundColor: "#FF9800",
+              color: "white",
+              border: "none",
+              borderRadius: 4,
+              cursor: loading || listening ? "not-allowed" : "pointer",
+              fontSize: 16,
+              fontWeight: "bold"
+            }}
+          >
+            🔁 Retry Recording
+          </button>
+          <button
+            onClick={() => setAnswers(prev => ({ ...prev, [question!.id]: transcript.trim() }))}
+            disabled={loading || listening || !transcript.trim() || !question}
+            style={{
+              padding: "12px 24px",
+              backgroundColor: "#3F51B5",
+              color: "white",
+              border: "none",
+              borderRadius: 4,
+              cursor: loading || listening || !transcript.trim() || !question ? "not-allowed" : "pointer",
+              fontSize: 16,
+              fontWeight: "bold"
+            }}
+          >
+            📤 Submit Response
+          </button>
+          <button
+            onClick={() => fetchQuestion(idx)}
+            disabled={loading || listening || speaking}
+            style={{
+              padding: "12px 24px",
+              backgroundColor: "#2196F3",
+              color: "white",
+              border: "none",
+              borderRadius: 4,
+              cursor: loading || listening || speaking ? "not-allowed" : "pointer",
+              fontSize: 16,
+              fontWeight: "bold"
+            }}
+          >
+            ➡️ Next
+          </button>
+        </div>
       </div>
+      )}
 
-      {evaluation && (
-        <div
-          style={{
-            border: "2px solid #4CAF50",
-            padding: 16,
-            borderRadius: 8,
-            backgroundColor: "#f1f8f4"
-          }}
-        >
-          <h3>✅ Evaluation Result</h3>
-          <div style={{ fontSize: 24, marginBottom: 12, fontWeight: "bold" }}>
-            Score: {evaluation.score}%
+      {/* Review & final submission */}
+      {endOfQuiz && !finalResults && (
+        <div style={{ border: "1px solid #ddd", padding: 16, borderRadius: 8, background: "#fff" }}>
+          <h3>Review your answers</h3>
+          <p>You’ve reached the end. Save anything missing, then submit all to see your results with Microsoft Learn links.</p>
+          {/* Unanswered questions list */}
+          {(() => {
+            const unanswered = seenQuestions.filter(q => !answers[q.id]);
+            if (unanswered.length === 0) return null;
+            return (
+              <div style={{ marginTop: 12, padding: 12, background: '#fff8e1', border: '1px solid #ffe082', borderRadius: 6 }}>
+                <strong>Unanswered questions ({unanswered.length}):</strong>
+                <ul style={{ margin: '8px 0 0 18px' }}>
+                  {unanswered.map(u => (
+                    <li key={u.id} style={{ marginBottom: 6 }}>
+                      {(u.heading || u.id)}
+                      <button
+                        onClick={() => goToQuestionById(u.id)}
+                        style={{ marginLeft: 8, padding: '4px 10px', borderRadius: 4, border: '1px solid #ccc', cursor: 'pointer' }}
+                      >
+                        Go answer
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })()}
+          <div style={{ marginTop: 12 }}>
+            {Object.keys(answers).length === 0 && <p>No answers saved yet.</p>}
+            {Object.entries(answers).map(([qid, text]) => (
+              <div key={qid} style={{ marginBottom: 8 }}>
+                <strong>{qid}</strong>
+                <div style={{ marginTop: 4, padding: 8, background: "#f9f9f9", borderRadius: 4 }}>{text}</div>
+              </div>
+            ))}
           </div>
-          <div style={{ marginBottom: 12 }}>
-            <strong>✓ Matched phrases:</strong>
-            <p>{evaluation.matched_phrases?.join(", ") || "None"}</p>
-          </div>
-          <div style={{ marginBottom: 12 }}>
-            <strong>✗ Missing phrases:</strong>
-            <p>{evaluation.missing_phrases?.join(", ") || "None"}</p>
-          </div>
-          <div>
-            <strong>📝 Feedback:</strong>
-            <p style={{ marginTop: 8, fontStyle: "italic" }}>{evaluation.feedback}</p>
-          </div>
-          {speaking && <p style={{ marginTop: 12, color: "#FF9800" }}>🔊 Playing feedback...</p>}
+          <button
+            onClick={onSubmitAll}
+            disabled={loading || Object.keys(answers).length === 0}
+            style={{
+              padding: "12px 24px",
+              marginTop: 12,
+              backgroundColor: "#4CAF50",
+              color: "white",
+              border: "none",
+              borderRadius: 4,
+              cursor: loading || Object.keys(answers).length === 0 ? "not-allowed" : "pointer",
+              fontSize: 16,
+              fontWeight: "bold"
+            }}
+          >
+            {loading ? "Evaluating..." : "🚀 Submit All"}
+          </button>
+        </div>
+      )}
+
+      {/* Final results */}
+      {finalResults && (
+        <div style={{ border: "2px solid #4CAF50", padding: 16, borderRadius: 8, background: "#f1f8f4" }}>
+          <h3>✅ Final Evaluation</h3>
+          <div style={{ fontSize: 22, marginBottom: 12, fontWeight: "bold" }}>Overall Technical Score: {finalResults.overallScore}%</div>
+          
+          {/* Overall sentiment summary */}
+          {(() => {
+            const sentiments = finalResults.results
+              .map(r => r.evaluation?.sentiment)
+              .filter(s => s && typeof s === 'object');
+            if (sentiments.length === 0) return null;
+            
+            const avgConfidence = Math.round(sentiments.reduce((sum, s) => sum + (s.confidence || 0), 0) / sentiments.length);
+            const avgEmpathy = Math.round(sentiments.reduce((sum, s) => sum + (s.empathy || 0), 0) / sentiments.length);
+            const avgExecutive = Math.round(sentiments.reduce((sum, s) => sum + (s.executive_presence || 0), 0) / sentiments.length);
+            const avgProfessionalism = Math.round(sentiments.reduce((sum, s) => sum + (s.professionalism || 0), 0) / sentiments.length);
+            
+            const getColor = (score: number) => score >= 70 ? '#4CAF50' : score >= 50 ? '#FF9800' : '#f44336';
+            
+            return (
+              <div style={{ background: '#fff', border: '1px solid #ddd', borderRadius: 8, padding: 16, marginBottom: 16 }}>
+                <h4 style={{ marginTop: 0, marginBottom: 12 }}>Communication & Presence Assessment</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 13, color: '#666', marginBottom: 4 }}>Confidence</div>
+                    <div style={{ fontSize: 24, fontWeight: 'bold', color: getColor(avgConfidence) }}>{avgConfidence}%</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 13, color: '#666', marginBottom: 4 }}>Empathy</div>
+                    <div style={{ fontSize: 24, fontWeight: 'bold', color: getColor(avgEmpathy) }}>{avgEmpathy}%</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 13, color: '#666', marginBottom: 4 }}>Executive Presence</div>
+                    <div style={{ fontSize: 24, fontWeight: 'bold', color: getColor(avgExecutive) }}>{avgExecutive}%</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 13, color: '#666', marginBottom: 4 }}>Professionalism</div>
+                    <div style={{ fontSize: 24, fontWeight: 'bold', color: getColor(avgProfessionalism) }}>{avgProfessionalism}%</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+          
+          {finalResults.results.map((r, i) => (
+            <div key={i} style={{ background: "#fff", border: "1px solid #ddd", borderRadius: 8, padding: 12, marginBottom: 12 }}>
+              <div style={{ fontWeight: 600, marginBottom: 4 }}>{r.heading || r.questionId} {r.topic ? `(${r.topic})` : ""}</div>
+              <div style={{ marginBottom: 8 }}>Technical Score: {r.evaluation?.score}%</div>
+              <div style={{ marginBottom: 8 }}>
+                <strong>Technical Feedback:</strong>
+                <div style={{ marginTop: 4, fontStyle: "italic" }}>{r.evaluation?.feedback}</div>
+              </div>
+              
+              {/* Sentiment scores for this question */}
+              {r.evaluation?.sentiment && (
+                <div style={{ marginTop: 12, padding: 10, background: '#f9f9f9', borderRadius: 6 }}>
+                  <strong>Communication Assessment:</strong>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8, marginTop: 6, fontSize: 13 }}>
+                    <div>Confidence: <strong>{r.evaluation.sentiment.confidence}%</strong></div>
+                    <div>Empathy: <strong>{r.evaluation.sentiment.empathy}%</strong></div>
+                    <div>Executive Presence: <strong>{r.evaluation.sentiment.executive_presence}%</strong></div>
+                    <div>Professionalism: <strong>{r.evaluation.sentiment.professionalism}%</strong></div>
+                  </div>
+                  {r.evaluation?.sentiment_feedback && (
+                    <div style={{ marginTop: 8, fontSize: 13, color: '#555', fontStyle: 'italic' }}>
+                      {r.evaluation.sentiment_feedback}
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {/* Do not expose key phrases or missing phrases in UI */}
+              {r.learnLinks?.length > 0 && (
+                <div style={{ marginTop: 12 }}>
+                  <strong>Microsoft Learn resources:</strong>
+                  <ul style={{ margin: "6px 0 0 18px" }}>
+                    {r.learnLinks.map((l, j) => (
+                      <li key={j}><a href={l.url} target="_blank" rel="noreferrer">{l.title}</a></li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </div>

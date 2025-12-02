@@ -8,13 +8,22 @@ export default function App() {
     const [question, setQuestion] = useState(null);
     const [idx, setIdx] = useState(0);
     const [transcript, setTranscript] = useState("");
-    const [evaluation, setEvaluation] = useState(null);
+    const [answers, setAnswers] = useState({});
+    const [finalResults, setFinalResults] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+    const [endOfQuiz, setEndOfQuiz] = useState(false);
+    const [seenQuestions, setSeenQuestions] = useState([]);
     const [listening, setListening] = useState(false);
+    const [continuousListening, setContinuousListening] = useState(false);
     const [speaking, setSpeaking] = useState(false);
+    const [pausedListening, setPausedListening] = useState(false);
     const [azureReady, setAzureReady] = useState(false);
     const [browserFallbackReady, setBrowserFallbackReady] = useState(false);
+    const [autoRead, setAutoRead] = useState(true);
+    const [azureVoiceName, setAzureVoiceName] = useState("en-US-JennyNeural");
+    const [browserVoices, setBrowserVoices] = useState([]);
+    const [azureVoiceStyle, setAzureVoiceStyle] = useState("chat");
     const recognizerRef = useRef(null);
     const synthesizerRef = useRef(null);
     const webVoiceRef = useRef(null);
@@ -33,8 +42,8 @@ export default function App() {
                 const assignVoice = () => {
                     const voices = window.speechSynthesis.getVoices();
                     if (voices && voices.length) {
-                        webVoiceRef.current =
-                            voices.find(v => v.lang?.toLowerCase().startsWith("en")) || voices[0] || null;
+                        setBrowserVoices(voices);
+                        webVoiceRef.current = voices.find(v => v.lang?.toLowerCase().startsWith("en")) || voices[0] || null;
                     }
                 };
                 window.speechSynthesis.onvoiceschanged = assignVoice;
@@ -43,6 +52,25 @@ export default function App() {
         }
         catch { }
     }, []);
+    // Rebuild Azure synthesizer when voice changes
+    useEffect(() => {
+        if (!azureReady || !tokenRef.current)
+            return;
+        try {
+            const speechConfig = SpeechSDK.SpeechConfig.fromAuthorizationToken(tokenRef.current.token, tokenRef.current.region);
+            speechConfig.speechRecognitionLanguage = "en-US";
+            try {
+                speechConfig.speechSynthesisVoiceName = azureVoiceName || DEFAULT_AZURE_VOICE;
+            }
+            catch { }
+            try {
+                synthesizerRef.current?.close?.();
+            }
+            catch { }
+            synthesizerRef.current = new SpeechSDK.SpeechSynthesizer(speechConfig);
+        }
+        catch { }
+    }, [azureVoiceName, azureReady]);
     async function fetchToken() {
         try {
             const resp = await axios.get("/api/speech/token");
@@ -60,7 +88,7 @@ export default function App() {
             speechConfig.speechRecognitionLanguage = "en-US";
             // Set a pleasant neural voice for TTS
             try {
-                speechConfig.speechSynthesisVoiceName = DEFAULT_AZURE_VOICE;
+                speechConfig.speechSynthesisVoiceName = azureVoiceName || DEFAULT_AZURE_VOICE;
             }
             catch { }
             const audioConfig = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
@@ -73,6 +101,17 @@ export default function App() {
             setAzureReady(false);
         }
     }
+    function buildAzureSsml(text, voiceName) {
+        const safe = (text || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        return `<?xml version="1.0" encoding="UTF-8"?>
+<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="en-US">
+  <voice name="${voiceName}">
+    <mstts:express-as style="${azureVoiceStyle}" styledegree="1.5">
+      <prosody rate="+5%" pitch="+0%">${safe}</prosody>
+    </mstts:express-as>
+  </voice>
+</speak>`;
+    }
     // Speak helper that uses Azure when available, else browser speech
     function speakText(text) {
         if (!text)
@@ -81,7 +120,8 @@ export default function App() {
         // Azure path
         if (synthesizerRef.current) {
             try {
-                synthesizerRef.current.speakTextAsync(text, () => setSpeaking(false), (err) => { console.error(err); setSpeaking(false); });
+                const ssml = buildAzureSsml(text, azureVoiceName || DEFAULT_AZURE_VOICE);
+                synthesizerRef.current.speakSsmlAsync(ssml, () => setSpeaking(false), (err) => { console.error(err); setSpeaking(false); });
                 return;
             }
             catch (e) {
@@ -93,6 +133,8 @@ export default function App() {
             const u = new SpeechSynthesisUtterance(text);
             if (webVoiceRef.current)
                 u.voice = webVoiceRef.current;
+            u.rate = 1.05; // slightly more natural pacing
+            u.pitch = 1.0;
             u.onend = () => setSpeaking(false);
             u.onerror = () => setSpeaking(false);
             window.speechSynthesis.speak(u);
@@ -100,6 +142,46 @@ export default function App() {
         }
         setSpeaking(false);
         setError("No TTS available. Configure Azure Speech or use a browser with speechSynthesis support.");
+    }
+    function stopSpeaking() {
+        try {
+            // Browser speech: cancel queue
+            if (typeof window !== "undefined" && window.speechSynthesis) {
+                try {
+                    window.speechSynthesis.cancel();
+                }
+                catch { }
+            }
+            // Azure speech: try stopSpeakingAsync if available, else recreate synthesizer
+            const synth = synthesizerRef.current;
+            if (synth && typeof synth.stopSpeakingAsync === "function") {
+                try {
+                    synth.stopSpeakingAsync(() => { }, () => { });
+                }
+                catch { }
+            }
+            else if (synth && typeof synth.close === "function") {
+                try {
+                    synth.close();
+                }
+                catch { }
+                // Recreate synthesizer so future TTS still works
+                try {
+                    if (tokenRef.current) {
+                        const cfg = SpeechSDK.SpeechConfig.fromAuthorizationToken(tokenRef.current.token, tokenRef.current.region);
+                        try {
+                            cfg.speechSynthesisVoiceName = azureVoiceName || DEFAULT_AZURE_VOICE;
+                        }
+                        catch { }
+                        synthesizerRef.current = new SpeechSDK.SpeechSynthesizer(cfg);
+                    }
+                }
+                catch { }
+            }
+        }
+        finally {
+            setSpeaking(false);
+        }
     }
     async function fetchQuestion(i) {
         try {
@@ -109,9 +191,19 @@ export default function App() {
             setQuestion(resp.data.question);
             setIdx(resp.data.nextIndex);
             setTranscript("");
-            setEvaluation(null);
+            if (!resp.data.question) {
+                setEndOfQuiz(true);
+            }
+            if (resp.data.question) {
+                setSeenQuestions(prev => {
+                    const exists = prev.some(p => p.id === resp.data.question.id);
+                    if (exists)
+                        return prev;
+                    return [...prev, { id: resp.data.question.id, idx: i, heading: resp.data.question.heading }];
+                });
+            }
             // Auto-speak the question content
-            if (resp.data?.question?.question) {
+            if (autoRead && resp.data?.question?.question) {
                 speakText(resp.data.question.question);
             }
         }
@@ -139,19 +231,36 @@ export default function App() {
             setTranscript("");
             setError(null);
             if (azureReady && recognizerRef.current) {
-                // Azure Speech recognition (single utterance)
-                recognizerRef.current.recognizeOnceAsync((result) => {
-                    if (result.reason === SpeechSDK.ResultReason.RecognizedSpeech) {
-                        setTranscript(result.text);
+                // Azure Speech continuous recognition for extended speaking time
+                setContinuousListening(true);
+                let collected = "";
+                recognizerRef.current.recognized = (_s, e) => {
+                    try {
+                        const text = e?.result?.text || "";
+                        if (text) {
+                            collected = collected ? `${collected} ${text}` : text;
+                            setTranscript(collected);
+                        }
                     }
-                    else if (result.reason === SpeechSDK.ResultReason.NoMatch) {
-                        setError("No speech detected. Please try again.");
-                    }
-                    else if (result.reason === SpeechSDK.ResultReason.Canceled) {
-                        const cancellation = SpeechSDK.CancellationDetails.fromResult(result);
-                        setError(`Recognition error: ${cancellation.errorDetails}`);
-                    }
+                    catch { }
+                };
+                recognizerRef.current.canceled = (_s, e) => {
+                    setError(`Recognition canceled: ${e?.errorDetails || "unknown"}`);
                     setListening(false);
+                    setContinuousListening(false);
+                    try {
+                        recognizerRef.current?.stopContinuousRecognitionAsync?.(() => { }, () => { });
+                    }
+                    catch { }
+                };
+                recognizerRef.current.sessionStopped = () => {
+                    setListening(false);
+                    setContinuousListening(false);
+                };
+                recognizerRef.current.startContinuousRecognitionAsync(() => { }, (err) => {
+                    setError(`Failed to start recognition: ${err?.message || err}`);
+                    setListening(false);
+                    setContinuousListening(false);
                 });
                 return;
             }
@@ -161,12 +270,21 @@ export default function App() {
             if (SR) {
                 const rec = new SR();
                 rec.lang = "en-US";
-                rec.continuous = false;
-                rec.interimResults = false;
+                rec.continuous = true; // allow extended speech
+                rec.interimResults = true;
+                let collected = "";
                 rec.onresult = (e) => {
                     try {
-                        const text = e.results?.[0]?.[0]?.transcript || "";
-                        setTranscript(text);
+                        for (let i = e.resultIndex; i < e.results.length; i++) {
+                            const res = e.results[i];
+                            if (res.isFinal) {
+                                const text = res[0].transcript || "";
+                                if (text) {
+                                    collected = collected ? `${collected} ${text}` : text;
+                                    setTranscript(collected);
+                                }
+                            }
+                        }
                     }
                     catch { }
                 };
@@ -174,8 +292,9 @@ export default function App() {
                     console.error(e);
                     setError(`Recognition error: ${e?.error || "unknown"}`);
                 };
-                rec.onend = () => setListening(false);
+                rec.onend = () => { setListening(false); setContinuousListening(false); };
                 rec.start();
+                setContinuousListening(true);
                 return;
             }
             setError("No speech recognition available. Configure Azure Speech or use Chrome/Edge (Web Speech API).");
@@ -186,32 +305,71 @@ export default function App() {
             setListening(false);
         }
     }
-    async function onSubmitAnswer() {
-        if (!question || !transcript.trim()) {
-            setError("Please speak an answer or type one manually");
+    function onStopListening() {
+        try {
+            setListening(false);
+            setContinuousListening(false);
+            // Azure
+            try {
+                recognizerRef.current?.stopContinuousRecognitionAsync?.(() => { }, () => { });
+            }
+            catch { }
+            // Browser
+            const w = window;
+            const SR = w?.SpeechRecognition || w?.webkitSpeechRecognition;
+            if (SR && w?.currentRecognizerInstance) {
+                try {
+                    w.currentRecognizerInstance.stop?.();
+                }
+                catch { }
+            }
+        }
+        catch { }
+    }
+    function onRetryRecording() {
+        setTranscript("");
+        onStartListening();
+    }
+    function togglePauseListening() {
+        // Simulate pause by stopping continuous recognition; resume restarts it and keeps collected transcript
+        if (!listening)
+            return;
+        if (!pausedListening) {
+            onStopListening();
+            setPausedListening(true);
+        }
+        else {
+            setPausedListening(false);
+            onStartListening();
+        }
+    }
+    function onSaveAnswer() {
+        if (!question)
+            return;
+        const text = transcript.trim();
+        if (!text) {
+            setError("Please speak an answer or type one before saving");
             return;
         }
+        setAnswers(prev => ({ ...prev, [question.id]: text }));
+    }
+    function goToQuestionById(qid) {
+        const target = seenQuestions.find(sq => sq.id === qid);
+        if (!target)
+            return;
+        setEndOfQuiz(false);
+        fetchQuestion(target.idx);
+    }
+    async function onSubmitAll() {
         try {
             setLoading(true);
             setError(null);
-            const resp = await axios.post("/api/evaluate", {
-                transcript,
-                question,
-                sessionId: "local-session"
-            });
-            setEvaluation(resp.data.evaluation);
-            // Speak the feedback
-            const feedbackText = `Score ${resp.data.evaluation.score}. ${resp.data.evaluation.feedback}`;
-            if (synthesizerRef.current) {
-                setSpeaking(true);
-                synthesizerRef.current.speakTextAsync(feedbackText, () => setSpeaking(false), (err) => {
-                    console.error("TTS feedback error:", err);
-                    setSpeaking(false);
-                });
-            }
+            const answersArray = Object.entries(answers).map(([questionId, transcript]) => ({ questionId, transcript }));
+            const resp = await axios.post("/api/evaluate-all", { sessionId: "local-session", answers: answersArray });
+            setFinalResults(resp.data);
         }
         catch (err) {
-            setError(`Evaluation failed: ${err.message}`);
+            setError(`Final evaluation failed: ${err.message}`);
             console.error(err);
         }
         finally {
@@ -225,24 +383,27 @@ export default function App() {
                     border: "1px solid #e0e0e0",
                     borderRadius: 8,
                     background: "#fafafa"
-                }, children: [_jsxs("p", { style: { marginBottom: 6 }, children: [_jsx("strong", { children: "Bot (CTO of Zava):" }), " I\u2019m concerned about frequent outages impacting our mission-critical application. I\u2019m unhappy with the support quality we\u2019ve received so far and I\u2019m skeptical about the practicality and risks of the recommendations you\u2019ve proposed."] }), _jsxs("p", { children: [_jsx("strong", { children: "You (Microsoft Architect):" }), " Engage, clarify constraints, and address risk, support quality, and implementation concerns. Provide actionable, prioritized steps to improve reliability."] })] }), error && (_jsxs("div", { style: {
+                }, children: [_jsxs("p", { style: { marginBottom: 6 }, children: [_jsx("strong", { children: "CTO of Zava (speaking to you):" }), " Our mission-critical app has had too many outages, and our support experience hasn\u2019t met expectations. I need a practical plan that improves reliability quickly, shortens detection and recovery times, and brings spend under control without adding risk."] }), _jsx("p", { children: "Speak to me directly. Be clear, pragmatic, and back your recommendations with Azure best practices." })] }), _jsxs("div", { style: { display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }, children: [_jsxs("label", { style: { display: "flex", alignItems: "center", gap: 8 }, children: [_jsx("input", { type: "checkbox", checked: autoRead, onChange: e => setAutoRead(e.target.checked) }), "Auto-read questions"] }), _jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8 }, children: [_jsx("span", { style: { color: "#333" }, children: "Voice:" }), azureReady ? (_jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8 }, children: [_jsx("select", { value: azureVoiceName, onChange: e => setAzureVoiceName(e.target.value), children: ["en-US-JennyNeural", "en-US-JaneNeural", "en-US-AvaNeural", "en-US-DavisNeural", "en-US-GuyNeural", "en-GB-LibbyNeural", "en-GB-RyanNeural", "en-AU-NatashaNeural", "en-IN-NeerjaNeural"].map(v => (_jsx("option", { value: v, children: v }, v))) }), _jsx("span", { style: { color: "#333" }, children: "Style:" }), _jsx("select", { value: azureVoiceStyle, onChange: e => setAzureVoiceStyle(e.target.value), children: ["chat", "customerservice", "newscast-casual", "empathetic"].map(s => (_jsx("option", { value: s, children: s }, s))) })] })) : browserFallbackReady ? (_jsx("select", { value: webVoiceRef.current?.name || "", onChange: e => {
+                                    const v = browserVoices.find(bv => bv.name === e.target.value) || null;
+                                    webVoiceRef.current = v;
+                                }, children: browserVoices.map(v => (_jsxs("option", { value: v.name, children: [v.name, " (", v.lang, ")"] }, v.name))) })) : (_jsx("span", { style: { color: "#666" }, children: "Loading voices\u2026" }))] })] }), error && (_jsxs("div", { style: {
                     padding: 12,
                     backgroundColor: "#fee",
                     border: "1px solid #f00",
                     borderRadius: 6,
                     marginBottom: 16,
                     color: "#c00"
-                }, children: ["\u26A0\uFE0F ", error] })), _jsx("div", { style: { marginBottom: 16, display: "flex", gap: 8 }, children: _jsx("button", { onClick: () => fetchQuestion(idx), disabled: loading || listening || speaking, style: {
+                }, children: ["\u26A0\uFE0F ", error] })), !endOfQuiz && (_jsx("div", { style: { marginBottom: 16, display: "flex", gap: 8 }, children: _jsx("button", { onClick: () => fetchQuestion(idx), disabled: loading || listening || speaking, style: {
                         padding: "10px 16px",
                         cursor: loading || listening || speaking ? "not-allowed" : "pointer",
                         opacity: loading || listening || speaking ? 0.6 : 1
-                    }, children: loading ? "Loading..." : "Next Question" }) }), _jsxs("div", { style: {
+                    }, children: loading ? "Loading..." : "Next Question" }) })), _jsxs("div", { style: {
                     border: "1px solid #ddd",
                     padding: 16,
                     borderRadius: 8,
                     backgroundColor: "#f9f9f9",
                     marginBottom: 16
-                }, children: [_jsx("h3", { style: { display: "flex", alignItems: "center", gap: 12 }, children: "\uD83D\uDCDD Question" }), _jsxs("div", { style: { display: "flex", gap: 16, alignItems: "flex-start" }, children: [_jsx("img", { src: "/bot.svg", alt: "Quiz Bot", width: 72, height: 72, style: {
+                }, children: [_jsx("h3", { style: { display: "flex", alignItems: "center", gap: 12 }, children: "\uD83D\uDDE3\uFE0F CTO" }), _jsxs("div", { style: { display: "flex", gap: 16, alignItems: "flex-start" }, children: [_jsx("img", { src: "/bot.svg", alt: "Quiz Bot", width: 72, height: 72, style: {
                                     borderRadius: "50%",
                                     boxShadow: speaking ? "0 0 0 4px rgba(76,175,80,0.25)" : "none",
                                     transition: "box-shadow 200ms ease-in-out"
@@ -253,13 +414,15 @@ export default function App() {
                             border: "none",
                             borderRadius: 4,
                             cursor: !question || listening || speaking ? "not-allowed" : "pointer"
-                        }, children: speaking ? "🔊 Playing..." : "🔊 Play Question" }), question?.key_phrases && (_jsxs("div", { style: { marginTop: 12 }, children: [_jsx("strong", { children: "Key phrases to cover:" }), _jsx("div", { style: { display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }, children: question.key_phrases.map((phrase, i) => (_jsx("span", { style: {
-                                        backgroundColor: "#e0e7ff",
-                                        padding: "6px 12px",
-                                        borderRadius: 4,
-                                        fontSize: 14,
-                                        fontWeight: 500
-                                    }, children: phrase }, i))) })] }))] }), _jsxs("div", { style: {
+                        }, children: speaking ? "🔊 Playing..." : "🔊 Play Message" }), speaking && (_jsx("button", { onClick: stopSpeaking, style: {
+                            marginLeft: 8,
+                            padding: "8px 16px",
+                            backgroundColor: "#f44336",
+                            color: "white",
+                            border: "none",
+                            borderRadius: 4,
+                            cursor: "pointer"
+                        }, children: "\u23F9 Stop" }))] }), !endOfQuiz && (_jsxs("div", { style: {
                     border: "2px solid #4CAF50",
                     padding: 16,
                     borderRadius: 8,
@@ -274,26 +437,94 @@ export default function App() {
                             cursor: loading || listening || (!azureReady && !browserFallbackReady) ? "not-allowed" : "pointer",
                             fontSize: 16,
                             fontWeight: "bold"
-                        }, children: listening ? "🎤 Listening..." : "🎤 Start Listening" }), _jsx("div", { style: { marginTop: 8, color: "#666", fontSize: 13 }, children: azureReady ? "Using Azure Speech SDK" : browserFallbackReady ? "Using browser speech fallback" : "Speech not available" }), transcript && (_jsxs("div", { style: {
+                        }, children: listening ? "🎤 Listening..." : "🎤 Start Listening" }), listening && (_jsx("button", { onClick: onStopListening, style: {
+                            marginLeft: 8,
+                            padding: "12px 24px",
+                            backgroundColor: "#f44336",
+                            color: "white",
+                            border: "none",
+                            borderRadius: 4,
+                            cursor: "pointer",
+                            fontSize: 16,
+                            fontWeight: "bold"
+                        }, children: "\u23F9 Stop Listening" })), listening && (_jsx("button", { onClick: togglePauseListening, style: {
+                            marginLeft: 8,
+                            padding: "12px 24px",
+                            backgroundColor: pausedListening ? "#3F51B5" : "#9E9E9E",
+                            color: "white",
+                            border: "none",
+                            borderRadius: 4,
+                            cursor: "pointer",
+                            fontSize: 16,
+                            fontWeight: "bold"
+                        }, children: pausedListening ? "▶️ Resume Listening" : "⏸️ Pause Listening" })), _jsx("div", { style: { marginTop: 8, color: "#666", fontSize: 13 }, children: azureReady ? "Using Azure Speech SDK" : browserFallbackReady ? "Using browser speech fallback" : "Speech not available" }), transcript && (_jsxs("div", { style: {
                             marginTop: 12,
                             padding: 12,
                             backgroundColor: "white",
                             border: "1px solid #ddd",
                             borderRadius: 4
-                        }, children: [_jsx("strong", { children: "Your answer:" }), _jsx("p", { style: { marginTop: 8, fontSize: 16, lineHeight: 1.5 }, children: transcript })] })), _jsx("button", { onClick: onSubmitAnswer, disabled: loading || listening || !transcript.trim() || !question, style: {
+                        }, children: [_jsx("strong", { children: "Your answer:" }), _jsx("p", { style: { marginTop: 8, fontSize: 16, lineHeight: 1.5 }, children: transcript })] })), _jsxs("div", { style: { display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }, children: [_jsx("button", { onClick: onSaveAnswer, disabled: loading || listening || !transcript.trim() || !question, style: {
+                                    padding: "12px 24px",
+                                    backgroundColor: "#4CAF50",
+                                    color: "white",
+                                    border: "none",
+                                    borderRadius: 4,
+                                    cursor: loading || listening || !transcript.trim() || !question ? "not-allowed" : "pointer",
+                                    fontSize: 16,
+                                    fontWeight: "bold"
+                                }, children: "\uD83D\uDCBE Save Answer" }), _jsx("button", { onClick: onRetryRecording, disabled: loading || listening, style: {
+                                    padding: "12px 24px",
+                                    backgroundColor: "#FF9800",
+                                    color: "white",
+                                    border: "none",
+                                    borderRadius: 4,
+                                    cursor: loading || listening ? "not-allowed" : "pointer",
+                                    fontSize: 16,
+                                    fontWeight: "bold"
+                                }, children: "\uD83D\uDD01 Retry Recording" }), _jsx("button", { onClick: () => setAnswers(prev => ({ ...prev, [question.id]: transcript.trim() })), disabled: loading || listening || !transcript.trim() || !question, style: {
+                                    padding: "12px 24px",
+                                    backgroundColor: "#3F51B5",
+                                    color: "white",
+                                    border: "none",
+                                    borderRadius: 4,
+                                    cursor: loading || listening || !transcript.trim() || !question ? "not-allowed" : "pointer",
+                                    fontSize: 16,
+                                    fontWeight: "bold"
+                                }, children: "\uD83D\uDCE4 Submit Response" }), _jsx("button", { onClick: () => fetchQuestion(idx), disabled: loading || listening || speaking, style: {
+                                    padding: "12px 24px",
+                                    backgroundColor: "#2196F3",
+                                    color: "white",
+                                    border: "none",
+                                    borderRadius: 4,
+                                    cursor: loading || listening || speaking ? "not-allowed" : "pointer",
+                                    fontSize: 16,
+                                    fontWeight: "bold"
+                                }, children: "\u27A1\uFE0F Next" })] })] })), endOfQuiz && !finalResults && (_jsxs("div", { style: { border: "1px solid #ddd", padding: 16, borderRadius: 8, background: "#fff" }, children: [_jsx("h3", { children: "Review your answers" }), _jsx("p", { children: "You\u2019ve reached the end. Save anything missing, then submit all to see your results with Microsoft Learn links." }), (() => {
+                        const unanswered = seenQuestions.filter(q => !answers[q.id]);
+                        if (unanswered.length === 0)
+                            return null;
+                        return (_jsxs("div", { style: { marginTop: 12, padding: 12, background: '#fff8e1', border: '1px solid #ffe082', borderRadius: 6 }, children: [_jsxs("strong", { children: ["Unanswered questions (", unanswered.length, "):"] }), _jsx("ul", { style: { margin: '8px 0 0 18px' }, children: unanswered.map(u => (_jsxs("li", { style: { marginBottom: 6 }, children: [(u.heading || u.id), _jsx("button", { onClick: () => goToQuestionById(u.id), style: { marginLeft: 8, padding: '4px 10px', borderRadius: 4, border: '1px solid #ccc', cursor: 'pointer' }, children: "Go answer" })] }, u.id))) })] }));
+                    })(), _jsxs("div", { style: { marginTop: 12 }, children: [Object.keys(answers).length === 0 && _jsx("p", { children: "No answers saved yet." }), Object.entries(answers).map(([qid, text]) => (_jsxs("div", { style: { marginBottom: 8 }, children: [_jsx("strong", { children: qid }), _jsx("div", { style: { marginTop: 4, padding: 8, background: "#f9f9f9", borderRadius: 4 }, children: text })] }, qid)))] }), _jsx("button", { onClick: onSubmitAll, disabled: loading || Object.keys(answers).length === 0, style: {
                             padding: "12px 24px",
                             marginTop: 12,
                             backgroundColor: "#4CAF50",
                             color: "white",
                             border: "none",
                             borderRadius: 4,
-                            cursor: loading || listening || !transcript.trim() || !question ? "not-allowed" : "pointer",
+                            cursor: loading || Object.keys(answers).length === 0 ? "not-allowed" : "pointer",
                             fontSize: 16,
                             fontWeight: "bold"
-                        }, children: loading ? "Evaluating..." : "✅ Submit Answer" })] }), evaluation && (_jsxs("div", { style: {
-                    border: "2px solid #4CAF50",
-                    padding: 16,
-                    borderRadius: 8,
-                    backgroundColor: "#f1f8f4"
-                }, children: [_jsx("h3", { children: "\u2705 Evaluation Result" }), _jsxs("div", { style: { fontSize: 24, marginBottom: 12, fontWeight: "bold" }, children: ["Score: ", evaluation.score, "%"] }), _jsxs("div", { style: { marginBottom: 12 }, children: [_jsx("strong", { children: "\u2713 Matched phrases:" }), _jsx("p", { children: evaluation.matched_phrases?.join(", ") || "None" })] }), _jsxs("div", { style: { marginBottom: 12 }, children: [_jsx("strong", { children: "\u2717 Missing phrases:" }), _jsx("p", { children: evaluation.missing_phrases?.join(", ") || "None" })] }), _jsxs("div", { children: [_jsx("strong", { children: "\uD83D\uDCDD Feedback:" }), _jsx("p", { style: { marginTop: 8, fontStyle: "italic" }, children: evaluation.feedback })] }), speaking && _jsx("p", { style: { marginTop: 12, color: "#FF9800" }, children: "\uD83D\uDD0A Playing feedback..." })] }))] }));
+                        }, children: loading ? "Evaluating..." : "🚀 Submit All" })] })), finalResults && (_jsxs("div", { style: { border: "2px solid #4CAF50", padding: 16, borderRadius: 8, background: "#f1f8f4" }, children: [_jsx("h3", { children: "\u2705 Final Evaluation" }), _jsxs("div", { style: { fontSize: 22, marginBottom: 12, fontWeight: "bold" }, children: ["Overall Technical Score: ", finalResults.overallScore, "%"] }), (() => {
+                        const sentiments = finalResults.results
+                            .map(r => r.evaluation?.sentiment)
+                            .filter(s => s && typeof s === 'object');
+                        if (sentiments.length === 0)
+                            return null;
+                        const avgConfidence = Math.round(sentiments.reduce((sum, s) => sum + (s.confidence || 0), 0) / sentiments.length);
+                        const avgEmpathy = Math.round(sentiments.reduce((sum, s) => sum + (s.empathy || 0), 0) / sentiments.length);
+                        const avgExecutive = Math.round(sentiments.reduce((sum, s) => sum + (s.executive_presence || 0), 0) / sentiments.length);
+                        const avgProfessionalism = Math.round(sentiments.reduce((sum, s) => sum + (s.professionalism || 0), 0) / sentiments.length);
+                        const getColor = (score) => score >= 70 ? '#4CAF50' : score >= 50 ? '#FF9800' : '#f44336';
+                        return (_jsxs("div", { style: { background: '#fff', border: '1px solid #ddd', borderRadius: 8, padding: 16, marginBottom: 16 }, children: [_jsx("h4", { style: { marginTop: 0, marginBottom: 12 }, children: "Communication & Presence Assessment" }), _jsxs("div", { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }, children: [_jsxs("div", { children: [_jsx("div", { style: { fontSize: 13, color: '#666', marginBottom: 4 }, children: "Confidence" }), _jsxs("div", { style: { fontSize: 24, fontWeight: 'bold', color: getColor(avgConfidence) }, children: [avgConfidence, "%"] })] }), _jsxs("div", { children: [_jsx("div", { style: { fontSize: 13, color: '#666', marginBottom: 4 }, children: "Empathy" }), _jsxs("div", { style: { fontSize: 24, fontWeight: 'bold', color: getColor(avgEmpathy) }, children: [avgEmpathy, "%"] })] }), _jsxs("div", { children: [_jsx("div", { style: { fontSize: 13, color: '#666', marginBottom: 4 }, children: "Executive Presence" }), _jsxs("div", { style: { fontSize: 24, fontWeight: 'bold', color: getColor(avgExecutive) }, children: [avgExecutive, "%"] })] }), _jsxs("div", { children: [_jsx("div", { style: { fontSize: 13, color: '#666', marginBottom: 4 }, children: "Professionalism" }), _jsxs("div", { style: { fontSize: 24, fontWeight: 'bold', color: getColor(avgProfessionalism) }, children: [avgProfessionalism, "%"] })] })] })] }));
+                    })(), finalResults.results.map((r, i) => (_jsxs("div", { style: { background: "#fff", border: "1px solid #ddd", borderRadius: 8, padding: 12, marginBottom: 12 }, children: [_jsxs("div", { style: { fontWeight: 600, marginBottom: 4 }, children: [r.heading || r.questionId, " ", r.topic ? `(${r.topic})` : ""] }), _jsxs("div", { style: { marginBottom: 8 }, children: ["Technical Score: ", r.evaluation?.score, "%"] }), _jsxs("div", { style: { marginBottom: 8 }, children: [_jsx("strong", { children: "Technical Feedback:" }), _jsx("div", { style: { marginTop: 4, fontStyle: "italic" }, children: r.evaluation?.feedback })] }), r.evaluation?.sentiment && (_jsxs("div", { style: { marginTop: 12, padding: 10, background: '#f9f9f9', borderRadius: 6 }, children: [_jsx("strong", { children: "Communication Assessment:" }), _jsxs("div", { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8, marginTop: 6, fontSize: 13 }, children: [_jsxs("div", { children: ["Confidence: ", _jsxs("strong", { children: [r.evaluation.sentiment.confidence, "%"] })] }), _jsxs("div", { children: ["Empathy: ", _jsxs("strong", { children: [r.evaluation.sentiment.empathy, "%"] })] }), _jsxs("div", { children: ["Executive Presence: ", _jsxs("strong", { children: [r.evaluation.sentiment.executive_presence, "%"] })] }), _jsxs("div", { children: ["Professionalism: ", _jsxs("strong", { children: [r.evaluation.sentiment.professionalism, "%"] })] })] }), r.evaluation?.sentiment_feedback && (_jsx("div", { style: { marginTop: 8, fontSize: 13, color: '#555', fontStyle: 'italic' }, children: r.evaluation.sentiment_feedback }))] })), r.learnLinks?.length > 0 && (_jsxs("div", { style: { marginTop: 12 }, children: [_jsx("strong", { children: "Microsoft Learn resources:" }), _jsx("ul", { style: { margin: "6px 0 0 18px" }, children: r.learnLinks.map((l, j) => (_jsx("li", { children: _jsx("a", { href: l.url, target: "_blank", rel: "noreferrer", children: l.title }) }, j))) })] }))] }, i)))] }))] }));
 }
