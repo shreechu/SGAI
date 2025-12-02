@@ -1,5 +1,4 @@
 
-import OpenAI from "openai";
 import { getSecret } from "../utils/secrets";
 
 // Sample deterministic prompt to instruct Azure OpenAI to return JSON
@@ -20,16 +19,35 @@ export default async function evaluate(transcript: string, question: any) {
   try {
      const endpoint = process.env.AZURE_OPENAI_ENDPOINT || await getSecret("AZURE_OPENAI_ENDPOINT");
      const apiKey = process.env.AZURE_OPENAI_API_KEY || await getSecret("AZURE_OPENAI_API_KEY");
-     const deployment = process.env.AZURE_OPENAI_DEPLOYMENT || await getSecret("AZURE_OPENAI_DEPLOYMENT");
-     if (!endpoint || !apiKey || !deployment) throw new Error("OpenAI not configured");
-     const client = new OpenAI({ apiKey, baseURL: endpoint });
-     const prompt = buildPrompt(transcript, question);
-     const resp = await client.responses.create({
-        model: deployment,
-        input: prompt,
-        max_tokens: 400
+     
+     if (!endpoint || !apiKey) throw new Error("Azure OpenAI not configured");
+     
+     // Use Azure OpenAI chat completions API
+     const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+           "Content-Type": "application/json",
+           "api-key": apiKey
+        },
+        body: JSON.stringify({
+           messages: [
+              {
+                 role: "user",
+                 content: buildPrompt(transcript, question)
+              }
+           ],
+           max_tokens: 400,
+           temperature: 0.3
+        })
      });
-     const text = String((resp.output?.[0]?.content?.[0]?.text) || "");
+     
+     if (!response.ok) {
+        throw new Error(`Azure OpenAI API error: ${response.status} ${response.statusText}`);
+     }
+     
+     const data = await response.json();
+     const text = data.choices?.[0]?.message?.content || "";
+     
      // Attempt to extract JSON from text
      const firstBrace = text.indexOf("{");
      const lastBrace = text.lastIndexOf("}");
@@ -41,7 +59,7 @@ export default async function evaluate(transcript: string, question: any) {
      // fallback to local scoring
      return localScore(transcript, question);
   } catch (err) {
-     console.warn("OpenAI evaluation failed, falling back:", err?.message || err);
+     console.warn("Azure OpenAI evaluation failed, falling back:", err?.message || err);
      return localScore(transcript, question);
   }
 }

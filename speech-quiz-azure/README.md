@@ -32,3 +32,41 @@ Quick start (local):
 
 For Azure deployment and Terraform usage, see infra/README-TERRAFORM.md
 
+
+## Secrets & Configuration
+
+This project reads configuration from environment variables. For local development, copy the example and populate values:
+
+- Create local `.env` (do not commit):
+
+  - Copy the example: `cp .env.example .env`
+  - Fill in the appropriate values below.
+
+- Example variables included in `.env.example`:
+  - `PORT` : Backend port (defaults to `7071`).
+  - `NODE_ENV` : `development` or `production`.
+  - `USE_KEY_VAULT` : `false` (local) or `true` (to fetch secrets from Azure Key Vault).
+  - `KEY_VAULT_NAME` : Name of the Key Vault (when using Key Vault).
+  - `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_CLIENT_SECRET` : Service principal credentials (when not using managed identity).
+  - `COSMOS_CONNECTION_STRING` : Cosmos DB connection string for production storage (optional for local dev).
+  - `AZURE_STORAGE_CONNECTION_STRING` : Blob storage connection string (optional for local dev).
+  - `OPENAI_API_KEY` : OpenAI API key (if using OpenAI cloud). If not present, the backend uses a local deterministic scorer fallback.
+  - `OPENAI_ORG` : Optional OpenAI organization id.
+  - `SESSION_STORE` : `file` (local default) or `cosmos`/`blob` for cloud store modes.
+  - `SESSION_FILE_PATH` : Path to local sessions file (default: `data/sessions.json`).
+
+- GitHub Actions / CI:
+  - Add repository secrets via GitHub settings → Secrets & variables → Actions.
+  - Recommended secret names:
+    - `OPENAI_API_KEY`
+    - `AZURE_CREDENTIALS` (for `azure/login` action - JSON for the service principal) or the individual `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_CLIENT_SECRET`.
+    - `COSMOS_CONNECTION_STRING`
+    - `AZURE_STORAGE_CONNECTION_STRING`
+  - The integration workflow will expect `OPENAI_API_KEY` (if you want the cloud grader) and optionally `AZURE_CREDENTIALS` to run infra-sensitive tests.
+
+Security notes:
+- Never commit a real `.env` file or credential material. `.env` is listed in `.gitignore`.
+- For production, prefer Azure Key Vault + managed identity or GitHub Actions secrets and avoid raw plaintext in repo.
+
+If you want, I can also add a small script to validate required env vars at server start and fail early with clear messages.
+
