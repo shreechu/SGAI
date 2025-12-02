@@ -1623,12 +1623,6 @@ function AppContent() {
                   {unanswered.map(u => (
                     <li key={u.id} style={{ marginBottom: 6 }}>
                       {(u.heading || u.id)}
-                      <button
-                        onClick={() => goToQuestionById(u.id)}
-                        style={{ marginLeft: 8, padding: '4px 10px', borderRadius: 4, border: '1px solid #ccc', cursor: 'pointer' }}
-                      >
-                        Go answer
-                      </button>
                     </li>
                   ))}
                 </ul>
@@ -1748,6 +1742,17 @@ function AppContent() {
                   <div style={{ marginBottom: 12, fontSize: 16, fontWeight: 600, color: "#4CAF50" }}>
                     Technical Score: {r.evaluation?.score}%
                   </div>
+                  
+                  {/* User's Answer */}
+                  {answers[r.questionId] && (
+                    <div style={{ marginBottom: 16, padding: 16, background: 'white', borderRadius: 12, border: "2px solid #667eea" }}>
+                      <strong style={{ color: "#1a237e", fontSize: 15 }}>Your Response:</strong>
+                      <div style={{ marginTop: 8, fontSize: 14, color: '#37474f', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                        {answers[r.questionId]}
+                      </div>
+                    </div>
+                  )}
+                  
                   <div style={{ marginBottom: 12 }}>
                     <strong style={{ color: "#555" }}>Technical Feedback:</strong>
                     <div style={{ marginTop: 6, fontStyle: "italic", fontSize: 14, color: "#37474f" }}>
