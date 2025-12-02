@@ -21,9 +21,10 @@ export default function App() {
     const [azureReady, setAzureReady] = useState(false);
     const [browserFallbackReady, setBrowserFallbackReady] = useState(false);
     const [autoRead, setAutoRead] = useState(true);
-    const [azureVoiceName, setAzureVoiceName] = useState("en-US-AndrewMultilingualNeural");
+    // Using the most realistic, human-like voice available
+    const AZURE_VOICE = "en-US-AndrewMultilingualNeural";
+    const VOICE_STYLE = "friendly";
     const [browserVoices, setBrowserVoices] = useState([]);
-    const [azureVoiceStyle, setAzureVoiceStyle] = useState("friendly");
     const recognizerRef = useRef(null);
     const synthesizerRef = useRef(null);
     const webVoiceRef = useRef(null);
@@ -56,16 +57,11 @@ export default function App() {
     useEffect(() => {
         if (!azureReady || !tokenRef.current)
             return;
-        // If currently speaking, stop it first
-        const wasPlaying = speaking;
-        if (wasPlaying) {
-            stopSpeaking();
-        }
         try {
             const speechConfig = SpeechSDK.SpeechConfig.fromAuthorizationToken(tokenRef.current.token, tokenRef.current.region);
             speechConfig.speechRecognitionLanguage = "en-US";
             try {
-                speechConfig.speechSynthesisVoiceName = azureVoiceName || DEFAULT_AZURE_VOICE;
+                speechConfig.speechSynthesisVoiceName = AZURE_VOICE;
             }
             catch { }
             try {
@@ -75,11 +71,7 @@ export default function App() {
             synthesizerRef.current = new SpeechSDK.SpeechSynthesizer(speechConfig);
         }
         catch { }
-        // If was playing, restart with new voice
-        if (wasPlaying && question?.question) {
-            setTimeout(() => speakText(question.question), 300);
-        }
-    }, [azureVoiceName, azureVoiceStyle, azureReady]);
+    }, [azureReady]);
     async function fetchToken() {
         try {
             const resp = await axios.get("/api/speech/token");
@@ -95,9 +87,9 @@ export default function App() {
         try {
             const speechConfig = SpeechSDK.SpeechConfig.fromAuthorizationToken(tokenInfo.token, tokenInfo.region);
             speechConfig.speechRecognitionLanguage = "en-US";
-            // Set a pleasant neural voice for TTS
+            // Set the most realistic neural voice for TTS
             try {
-                speechConfig.speechSynthesisVoiceName = azureVoiceName || DEFAULT_AZURE_VOICE;
+                speechConfig.speechSynthesisVoiceName = AZURE_VOICE;
             }
             catch { }
             const audioConfig = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
@@ -112,16 +104,11 @@ export default function App() {
     }
     function buildAzureSsml(text, voiceName) {
         const safe = (text || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        // Check if voice supports the selected style
-        const multilingualVoices = ['AndrewMultilingualNeural', 'EmmaMultilingualNeural', 'BrianMultilingualNeural', 'AvaMultilingualNeural'];
-        const isMultilingual = multilingualVoices.some(v => voiceName.includes(v));
-        // Multilingual voices support fewer styles, use default friendly/chat
-        const effectiveStyle = isMultilingual ? (azureVoiceStyle === 'friendly' || azureVoiceStyle === 'chat' ? azureVoiceStyle : 'friendly') : azureVoiceStyle;
         return `<?xml version="1.0" encoding="UTF-8"?>
 <speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="en-US">
   <voice name="${voiceName}">
-    <mstts:express-as style="${effectiveStyle}" styledegree="2">
-      <prosody rate="+8%" pitch="+2%" volume="+10%">
+    <mstts:express-as style="${VOICE_STYLE}" styledegree="2">
+      <prosody rate="0.95" pitch="+0%" volume="+5%">
         ${safe}
       </prosody>
     </mstts:express-as>
@@ -136,7 +123,7 @@ export default function App() {
         // Azure path
         if (synthesizerRef.current) {
             try {
-                const ssml = buildAzureSsml(text, azureVoiceName || DEFAULT_AZURE_VOICE);
+                const ssml = buildAzureSsml(text, AZURE_VOICE);
                 synthesizerRef.current.speakSsmlAsync(ssml, () => setSpeaking(false), (err) => { console.error(err); setSpeaking(false); });
                 return;
             }
@@ -203,7 +190,7 @@ export default function App() {
                     if (tokenRef.current) {
                         const cfg = SpeechSDK.SpeechConfig.fromAuthorizationToken(tokenRef.current.token, tokenRef.current.region);
                         try {
-                            cfg.speechSynthesisVoiceName = azureVoiceName || DEFAULT_AZURE_VOICE;
+                            cfg.speechSynthesisVoiceName = AZURE_VOICE;
                         }
                         catch { }
                         synthesizerRef.current = new SpeechSDK.SpeechSynthesizer(cfg);
@@ -444,53 +431,7 @@ export default function App() {
                                     background: "#f8f9fa",
                                     borderRadius: 8,
                                     marginBottom: 24
-                                }, children: [_jsxs("label", { style: { display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }, children: [_jsx("input", { type: "checkbox", checked: autoRead, onChange: e => setAutoRead(e.target.checked) }), _jsx("span", { style: { fontSize: 14 }, children: "Auto-read questions" })] }), _jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8 }, children: [_jsx("span", { style: { color: "#555", fontSize: 14, fontWeight: 600 }, children: "Voice:" }), azureReady ? (_jsxs("div", { style: { display: "flex", alignItems: "center", gap: 8 }, children: [_jsx("select", { value: azureVoiceName, onChange: e => setAzureVoiceName(e.target.value), style: { padding: "6px 10px", borderRadius: 6, border: "1px solid #ddd", fontSize: 14 }, children: [
-                                                            "en-US-AndrewMultilingualNeural",
-                                                            "en-US-EmmaMultilingualNeural",
-                                                            "en-US-BrianMultilingualNeural",
-                                                            "en-US-AvaMultilingualNeural",
-                                                            "en-US-JennyNeural",
-                                                            "en-US-GuyNeural",
-                                                            "en-US-AriaNeural",
-                                                            "en-US-DavisNeural",
-                                                            "en-US-JaneNeural",
-                                                            "en-US-JasonNeural",
-                                                            "en-US-SaraNeural",
-                                                            "en-US-TonyNeural",
-                                                            "en-US-NancyNeural",
-                                                            "en-US-AmberNeural",
-                                                            "en-US-AnaNeural",
-                                                            "en-US-AshleyNeural",
-                                                            "en-US-BrandonNeural",
-                                                            "en-US-ChristopherNeural",
-                                                            "en-US-CoraNeural",
-                                                            "en-US-ElizabethNeural",
-                                                            "en-US-EricNeural",
-                                                            "en-US-JacobNeural",
-                                                            "en-US-MichelleNeural",
-                                                            "en-US-MonicaNeural",
-                                                            "en-US-RogerNeural",
-                                                            "en-US-SteffanNeural"
-                                                        ].map(v => (_jsx("option", { value: v, children: v.replace('Neural', '').replace('Multilingual', ' (Multilingual)') }, v))) }), _jsx("span", { style: { color: "#555", fontSize: 14, fontWeight: 600 }, children: "Style:" }), _jsx("select", { value: azureVoiceStyle, onChange: e => setAzureVoiceStyle(e.target.value), style: { padding: "6px 10px", borderRadius: 6, border: "1px solid #ddd", fontSize: 14 }, children: [
-                                                            "friendly",
-                                                            "chat",
-                                                            "cheerful",
-                                                            "empathetic",
-                                                            "calm",
-                                                            "assistant",
-                                                            "customerservice",
-                                                            "newscast-casual",
-                                                            "professional",
-                                                            "excited"
-                                                        ].map(s => (_jsx("option", { value: s, children: s.charAt(0).toUpperCase() + s.slice(1) }, s))) })] })) : browserFallbackReady ? (_jsx("select", { value: webVoiceRef.current?.name || "", onChange: e => {
-                                                    const v = browserVoices.find(bv => bv.name === e.target.value) || null;
-                                                    webVoiceRef.current = v;
-                                                    // If currently speaking with browser speech, restart with new voice
-                                                    if (speaking && typeof window !== "undefined" && window.speechSynthesis && question?.question) {
-                                                        window.speechSynthesis.cancel();
-                                                        setTimeout(() => speakText(question.question), 100);
-                                                    }
-                                                }, style: { padding: "6px 10px", borderRadius: 6, border: "1px solid #ddd", fontSize: 14 }, children: browserVoices.map(v => (_jsxs("option", { value: v.name, children: [v.name, " (", v.lang, ")"] }, v.name))) })) : (_jsx("span", { style: { color: "#999", fontSize: 14 }, children: "Loading voices\u2026" }))] })] }), error && (_jsxs("div", { style: {
+                                }, children: [_jsxs("label", { style: { display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }, children: [_jsx("input", { type: "checkbox", checked: autoRead, onChange: e => setAutoRead(e.target.checked) }), _jsx("span", { style: { fontSize: 14 }, children: "Auto-read questions" })] }), _jsx("div", { style: { fontSize: 13, color: "#666", marginLeft: "auto" }, children: azureReady ? "🎙️ Premium Neural Voice Active" : browserFallbackReady ? "Browser Speech Active" : "Loading..." })] }), error && (_jsxs("div", { style: {
                                     padding: 16,
                                     backgroundColor: "#fee",
                                     border: "2px solid #f44336",
